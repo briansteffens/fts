@@ -3,6 +3,8 @@ fts
 
 File Transfer Service (prototype)
 
+Still just messing around, not really fit for day to day use.
+
 Some goals:
 - HTTP web service style interface for easy automation.
 - Receive files through wget or a browser with an HTTP GET.
