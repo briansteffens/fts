@@ -2,49 +2,84 @@
 
 require_once("config.php");
 require_once("shared.php");
+require_once("test.php");
+exit;
 
-$url = $_GET["url"];
+$request = new stdClass;
 
-# http://example.com/upload - simple single post upload
-if (starts_with($url, "upload")) {
-	require_once("upload_simple.php");
-	exit;
+$request->method = $_SERVER['REQUEST_METHOD'];
+$request->full_path = $_GET["url"];
+
+// Figure out which kind of resource the URL is referencing (directory/file/chunk).
+$request->resource_type = "file";
+$request->chunk_index = NULL;
+if (substr($request->full_path, -1) === "/")
+	$request->resource_type = "directory";
+elseif (isset($_GET["chunk"])) {
+	$request->resource_type = "chunk";
+	$request->chunk_index = $_GET["chunk"];
 }
 
-# http://example.com/start - upload a file digest, starting a chunked file upload
-if ($url == "start") {
-	require_once("upload_start.php");
-	exit;
+// Get the expected response content type.
+$request->content_type = "html";
+if (isset($_GET["json"]))
+	$request->content_type = "json";
+
+// Import the appropriate content_type handler.
+require_once($request->content_type.".handler.php");
+
+// Get the resource descriptor
+$request->descriptor = new stdClass;
+$request->descriptor->user = "brian";
+$request->descriptor->group = "users";
+$request->descriptor->permissions = "0755";
+Handler::set_resource_descriptor($request);
+
+$context = new stdClass;
+$context->request = $request;
+
+$api = new Api($context);
+
+$context->result = new stdClass;
+$context->result->status_code = 200;
+$context->result->message = "";
+
+// Dispatch
+try {
+	switch ($context->request->resource_type) {
+		case "directory":
+			switch ($context->request->method) {
+				case "GET":
+					$api->list_directory($context);
+					break;
+				case "PUT":
+					$api->create_directory($context);
+					break;
+				case "DELETE":
+					$api->delete_directory($context);
+					break;
+			}
+			
+			break;
+			
+		case "file":
+			if ($request_method === "GET") {
+				// Download file metadata
+			} elseif ($request_method === "PUT") {
+				// Upload file digest (start chunked create/update file)
+			} elseif ($request_method === "DELETE") {
+				// Delete file
+			}
+			
+			break;
+	}
+} catch (FtsServerException $e) {
+	$context->result->status_code = $e->http_status_code;
+	$context->result->message = $e->getMessage();
 }
 
-# http://example.com/resume - resume a chunked file upload
-if ($url == "resume") {
-	require_once("upload_resume.php");
-	exit;
-}
+$api->close();
 
-$parts = explode("/", $url);
-
-# http://example.com/ - nothing/index
-if (sizeof($parts) == 0 || (sizeof($parts) == 1 && $parts[0] === "")) {
-	require_once("upload_form.php");
-	exit;
-}
-
-$file_id = $parts[0];
-
-# http://example.com/iehe7j38d7 - attempt to download a file
-if (sizeof($parts) == 1) {
-	require_once("download.php");
-	exit;
-}
-
-$chunk_index = $parts[1];
-
-# http://example.com/iehe7j38d7/10 - upload a chunk
-if (sizeof($parts) == 2) {
-	require_once("upload_chunk.php");
-	exit;
-}
+Handler::process_response($context);
 
 ?>
