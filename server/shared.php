@@ -9,6 +9,93 @@ class FtsServerException extends RuntimeException {
 	}
 }
 
+class FtsDataException extends FtsServerException {
+	public function __construct($http_status_code, $message='', $code=0) {
+		return parent::__construct($http_status_code, $message, $code);
+	}
+}
+
+class Query {
+	
+	var $db;
+	var $q;
+	var $result;
+	var $row;
+	
+	var $executed = FALSE;
+	var $affected_rows = NULL;
+	
+	public function Query($db, $sql) {
+		$this->db = $db;
+		
+		$this->q = $this->db->prepare($sql);
+		if (!$this->q)
+			throw new FtsDataException(500, 
+				"Database rejected query. Error: [".$this->db->error."]"
+				);
+	}
+	
+	public function params() {
+		if (!call_user_func_array(
+			array($this->q, "bind_param"), func_get_args()))
+			throw new FtsDataException(500,
+				"Unable to bind parameters: [".$this->db->error."]"
+				);
+	}
+	
+	public function execute() {
+		if ($this->executed)
+			throw new FtsDataException(500, "Query already executed.");
+		
+		$this->executed = TRUE;
+		
+		if (!$this->q->execute())
+			throw new FtsDataException(500,
+				"Error executing query: [".$this->db->error."]"
+				);
+		
+		$this->affected_rows = $this->db->affected_rows;
+	}
+	
+	public function read() {
+		if (!$this->executed)
+			$this->execute();
+	
+		if ($this->result === NULL) {
+			$this->result = $this->q->get_result();
+			
+			if (!$this->result)
+				throw new FtsDataException(500,
+					"Error on retrieve: [".$this->db->error."]"
+					);
+		}
+		
+		$this->row = $this->result->fetch_assoc();
+		
+		if ($this->row === NULL) {
+			$this->close_result();
+			return FALSE;
+		}
+		
+		return TRUE;
+	}
+	
+	function close_result() {
+		if ($this->result !== NULL) {
+			$this->result->close();
+			$this->result = NULL;
+		}
+	}
+	
+	public function close() {
+		$this->close_result();	
+		
+		$this->q->close();
+		$this->q = NULL;
+	}
+	
+}
+
 class Api {
 
 	var $db;
@@ -25,26 +112,34 @@ class Api {
 		//$this->db->kill($thread);
 	}
 
+	public function query($sql) {
+		$q = new Query($this->db, $sql);
+		
+		if (func_num_args() >= 3)
+			call_user_func_array(
+				array($q, "params"), 
+				array_slice(func_get_args(), 1)
+				);
+			
+		return $q;
+	}
+
 	public function resolve_directory_part($parent_id, $path_name) {
-		$q = $this->db->prepare(
+		$q = $this->query(
 			"select id from directories ".
 			"where parent_id=? and directory_name=? ".
-			"limit 1;"
+			"limit 1;",
+			"is", $parent_id, $path_name
 			);
 			
-		$q->bind_param("is", $parent_id, $path_name);
-		
-		$q->execute();
-		
-		$q->bind_result($directory_id);
-		$fetch_successful = $q->fetch();
+		$fetch_successful = $q->read();
 		
 		$q->close();
 		
 		if (!$fetch_successful)
 			throw new FtsServerException(404, "Path not found.");
 			
-		return $directory_id;
+		return $q->row["id"];
 	}
 	
 	public function resolve_directory($full_path) {
@@ -87,24 +182,22 @@ class Api {
 		
 		$descriptor = $context->request->descriptor;
 		
-		$q = $this->db->prepare(
+		$q = $this->query(
 			"insert into directories ".
 			"(directory_name,parent_id,p_user,p_group,p_mask) ".
-			"values (?,?,?,?,?);"
-			);
-		
-		$q->bind_param("sisss", 
+			"values (?,?,?,?,?);",
+			"sisss",
 			$new_path_name, 
 			$parent_id,
 			$context->request->descriptor->user, 
 			$context->request->descriptor->group, 
-			$context->request->descriptor->permissions
+			$context->request->descriptor->permissions			
 			);
 			
 		$q->execute();
-		$affected_rows = $this->db->affected_rows;
 		$q->close();
-		if ($affected_rows != 1)
+		
+		if ($q->affected_rows != 1)
 			throw new FtsServerException(500, 
 				"Unknown error creating directory '".
 				$context->request->full_path."'");

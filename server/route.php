@@ -2,8 +2,8 @@
 
 require_once("config.php");
 require_once("shared.php");
-require_once("test.php");
-exit;
+//require_once("test.php");
+//exit;
 
 $request = new stdClass;
 
@@ -63,11 +63,11 @@ try {
 			break;
 			
 		case "file":
-			if ($request_method === "GET") {
+			if ($context->request->method === "GET") {
 				// Download file metadata
-			} elseif ($request_method === "PUT") {
+			} elseif ($context->request->method === "PUT") {
 				// Upload file digest (start chunked create/update file)
-			} elseif ($request_method === "DELETE") {
+			} elseif ($context->request->method === "DELETE") {
 				// Delete file
 			}
 			
