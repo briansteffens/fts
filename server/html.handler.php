@@ -10,7 +10,7 @@ class Handler {
 			$request->descriptor->group = $_GET["group"];
 
 		if (isset($_GET["permissions"]))
-			$request->descriptor->permissions = $_GET["permissions"];
+			$request->descriptor->mask = $_GET["permissions"];
 
 		if ($request->resource_type === "file") {	
 			if (isset($_GET["file_size"]))

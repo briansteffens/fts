@@ -11,7 +11,33 @@ class Handler {
 		if (!isset($post_body))
 			return;
 		
-		$request->descriptor = json_decode($post_body);
+		$descriptor = json_decode($post_body);
+		
+		if (isset($descriptor->id))
+			$request->descriptor->id = $descriptor->id;
+		
+		if (isset($descriptor->user))
+			$request->descriptor->user = $descriptor->user;
+		
+		if (isset($descriptor->group))
+			$request->descriptor->group = $descriptor->group;
+		
+		if (isset($descriptor->mask))
+			$request->descriptor->mask = $descriptor->mask;
+		
+		if ($request->resource_type === "file") {	
+			if (isset($descriptor->file_size))
+				$request->descriptor->file_size = $descriptor->file_size;
+
+			if (isset($descriptor->chunk_size))
+				$request->descriptor->chunk_size = $descriptor->chunk_size;
+
+			if (isset($descriptor->file_hash))
+				$request->descriptor->file_hash = $descriptor->file_hash;
+
+			if (isset($descriptor->chunk_hashes))
+				$request->descriptor->chunk_hashes = $descriptor->chunk_hashes;		
+		}
 	}
 	
 	public static function process_response($context) {

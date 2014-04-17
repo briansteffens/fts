@@ -2,15 +2,24 @@
 
 require_once("config.php");
 require_once("shared.php");
-//require_once("test.php");
-//exit;
+require_once("model.php");
+/*
+$model = new Model();
 
+$p1 = Path::get_by_id($model, 32);
+$p1->user = "^_^";
+var_dump($p1);
+$p1->update($model);
+
+$model->close();
+exit;
+*/
 $request = new stdClass;
 
 $request->method = $_SERVER['REQUEST_METHOD'];
 $request->full_path = $_GET["url"];
 
-// Figure out which kind of resource the URL is referencing (directory/file/chunk).
+// Figure out the kind of resource (directory/file/chunk)
 $request->resource_type = "file";
 $request->chunk_index = NULL;
 if (substr($request->full_path, -1) === "/")
@@ -29,16 +38,24 @@ if (isset($_GET["json"]))
 require_once($request->content_type.".handler.php");
 
 // Get the resource descriptor
-$request->descriptor = new stdClass;
+switch ($request->resource_type) {
+	case "directory":
+		$request->descriptor = new Path();
+		break;
+	case "file":
+		//$request->descriptor = new File();
+		break;
+}
 $request->descriptor->user = "brian";
 $request->descriptor->group = "users";
-$request->descriptor->permissions = "0755";
+$request->descriptor->mask = "0755";
 Handler::set_resource_descriptor($request);
 
 $context = new stdClass;
 $context->request = $request;
 
-$api = new Api($context);
+$model = new Model();
+$api = new Api($context, $model);
 
 $context->result = new stdClass;
 $context->result->status_code = 200;
@@ -52,8 +69,11 @@ try {
 				case "GET":
 					$api->list_directory($context);
 					break;
-				case "PUT":
+				case "POST":
 					$api->create_directory($context);
+					break;
+				case "PUT":
+					$api->update_directory($context);
 					break;
 				case "DELETE":
 					$api->delete_directory($context);
@@ -78,7 +98,7 @@ try {
 	$context->result->message = $e->getMessage();
 }
 
-$api->close();
+$model->close();
 
 Handler::process_response($context);
 

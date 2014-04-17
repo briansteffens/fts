@@ -15,117 +15,18 @@ class FtsDataException extends FtsServerException {
 	}
 }
 
-class Query {
-	
-	var $db;
-	var $q;
-	var $result;
-	var $row;
-	
-	var $executed = FALSE;
-	var $affected_rows = NULL;
-	
-	public function Query($db, $sql) {
-		$this->db = $db;
-		
-		$this->q = $this->db->prepare($sql);
-		if (!$this->q)
-			throw new FtsDataException(500, 
-				"Database rejected query. Error: [".$this->db->error."]"
-				);
-	}
-	
-	public function params() {
-		if (!call_user_func_array(
-			array($this->q, "bind_param"), func_get_args()))
-			throw new FtsDataException(500,
-				"Unable to bind parameters: [".$this->db->error."]"
-				);
-	}
-	
-	public function execute() {
-		if ($this->executed)
-			throw new FtsDataException(500, "Query already executed.");
-		
-		$this->executed = TRUE;
-		
-		if (!$this->q->execute())
-			throw new FtsDataException(500,
-				"Error executing query: [".$this->db->error."]"
-				);
-		
-		$this->affected_rows = $this->db->affected_rows;
-	}
-	
-	public function read() {
-		if (!$this->executed)
-			$this->execute();
-	
-		if ($this->result === NULL) {
-			$this->result = $this->q->get_result();
-			
-			if (!$this->result)
-				throw new FtsDataException(500,
-					"Error on retrieve: [".$this->db->error."]"
-					);
-		}
-		
-		$this->row = $this->result->fetch_assoc();
-		
-		if ($this->row === NULL) {
-			$this->close_result();
-			return FALSE;
-		}
-		
-		return TRUE;
-	}
-	
-	function close_result() {
-		if ($this->result !== NULL) {
-			$this->result->close();
-			$this->result = NULL;
-		}
-	}
-	
-	public function close() {
-		$this->close_result();	
-		
-		$this->q->close();
-		$this->q = NULL;
-	}
-	
-}
-
 class Api {
 
-	var $db;
+	var $model;
 	var $context;
 	
-	public function Api($context) {
+	public function Api($context, $model) {
 		$this->context = $context;
-		$this->db = db_connect();
-	}
-	
-	public function close() {
-		$thread = $this->db->thread_id;
-		$this->db->close();
-		//$this->db->kill($thread);
-	}
-
-	public function query($sql) {
-		$q = new Query($this->db, $sql);
-		
-		if (func_num_args() >= 3)
-			call_user_func_array(
-				array($q, "params"), 
-				array_slice(func_get_args(), 1)
-				);
-			
-		return $q;
+		$this->model = $model;
 	}
 
 	public function resolve_directory_part($parent_id, $path_name) {
-		$q = $this->query(
+		$q = $this->model->query(
 			"select id from directories ".
 			"where parent_id=? and directory_name=? ".
 			"limit 1;",
@@ -151,6 +52,12 @@ class Api {
 		}
 		
 		return $parent_id;
+	}
+	
+	public function clean_path($path) {
+		$parts = explode("/", $path);
+		$parts = array_filter($parts, "strlen");
+		return implode("/", $parts);
 	}
 
 	public function create_directory($context) {
@@ -182,38 +89,67 @@ class Api {
 		
 		$descriptor = $context->request->descriptor;
 		
-		$q = $this->query(
-			"insert into directories ".
-			"(directory_name,parent_id,p_user,p_group,p_mask) ".
-			"values (?,?,?,?,?);",
-			"sisss",
-			$new_path_name, 
-			$parent_id,
-			$context->request->descriptor->user, 
-			$context->request->descriptor->group, 
-			$context->request->descriptor->permissions			
-			);
-			
-		$q->execute();
-		$q->close();
+		$descriptor->directory_name = $new_path_name;
+		$descriptor->parent_id = $parent_id;
 		
-		if ($q->affected_rows != 1)
-			throw new FtsServerException(500, 
-				"Unknown error creating directory '".
-				$context->request->full_path."'");
+		$descriptor->insert($this->model);
 	}
 
-	public static function list_directory($context) {
+	public function update_directory($context) {
+		$path = $this->clean_path($context->request->full_path);
+		$id = $this->resolve_directory($path);
+		
+		$path = Path::get_by_id($this->model, $id);
+		
+		$d = $context->request->descriptor;
+		
+		if (isset($d->parent_id))
+			$path->parent_id = $d->parent_id;
+		
+		if (isset($d->user))
+			$path->user = $d->user;
+			
+		if (isset($d->group))
+			$path->group = $d->group;
+			
+		if (isset($d->mask))
+			$path->mask = $d->mask; 
+		
+		$path->update($this->model);
+	}
+
+	public function list_directory($context) {
+		$path = $this->clean_path($context->request->full_path);
+		$id = $this->resolve_directory($path);
+		
+		$q = $this->model->query(
+			"select * from directories where parent_id = ?;", "i", $id);
+		
+		while ($q->read()) {
+			$dir = new Path();
+			$dir->select($q->row);
+			echo $dir->directory_name."<br />";
+		}
+		
+		$q->close();
 	}
 	
-	public static function delete_directory($context) {
+	public function delete_directory($context) {
+		$path = $this->clean_path($context->request->full_path);
+		$id = $this->resolve_directory($path);
+		
+		$path = new Path();
+		$path->id = $id;
+		
+		$path->delete($this->model);
 	}
 	
-	public static function file_info($context) {
+	public function file_info($context) {
 	}
 
 }
 
+/*
 function crypto_rand_secure($min, $max) {
     $range = $max - $min;
     if ($range == 0) return $min; // not so random...
@@ -283,15 +219,6 @@ function generate_file_id($db) {
 	}
 }
 
-function db_connect() {
-	global $config;
-	
-	$mysqli = new mysqli($config["db"]["host"], $config["db"]["user"], $config["db"]["pass"], $config["db"]["schema"]);
-	if (!$mysqli) die("Fail");
-	
-	return $mysqli;
-}
-
 function starts_with($haystack, $needle)
 {
     return $needle === "" || strpos($haystack, $needle) === 0;
@@ -301,5 +228,5 @@ function ends_with($haystack, $needle)
 {
     return $needle === "" || substr($haystack, -strlen($needle)) === $needle;
 }
-
+*/
 ?>
