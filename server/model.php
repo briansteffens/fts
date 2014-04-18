@@ -1,6 +1,6 @@
 <?php
 
-class Path extends Entity {
+class Dir extends Entity {
 	
 	var $id = NULL;
 	var $directory_name;
@@ -14,7 +14,7 @@ class Path extends Entity {
 	}
 	
 	public static function entity_name() {
-		return "Path";
+		return "Dir";
 	}
 	
 	public function select($row) {
@@ -60,6 +60,14 @@ class Path extends Entity {
 	}
 	
 }
+
+
+class File extends Entity {
+
+
+
+}
+
 
 class Entity {
 

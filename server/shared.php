@@ -99,23 +99,23 @@ class Api {
 		$path = $this->clean_path($context->request->full_path);
 		$id = $this->resolve_directory($path);
 		
-		$path = Path::get_by_id($this->model, $id);
+		$dir = Dir::get_by_id($this->model, $id);
 		
 		$d = $context->request->descriptor;
 		
 		if (isset($d->parent_id))
-			$path->parent_id = $d->parent_id;
+			$dir->parent_id = $d->parent_id;
 		
 		if (isset($d->user))
-			$path->user = $d->user;
+			$dir->user = $d->user;
 			
 		if (isset($d->group))
-			$path->group = $d->group;
+			$dir->group = $d->group;
 			
 		if (isset($d->mask))
-			$path->mask = $d->mask; 
+			$dir->mask = $d->mask; 
 		
-		$path->update($this->model);
+		$dir->update($this->model);
 	}
 
 	public function list_directory($context) {
@@ -126,7 +126,7 @@ class Api {
 			"select * from directories where parent_id = ?;", "i", $id);
 		
 		while ($q->read()) {
-			$dir = new Path();
+			$dir = new Dir();
 			$dir->select($q->row);
 			echo $dir->directory_name."<br />";
 		}
@@ -135,13 +135,13 @@ class Api {
 	}
 	
 	public function delete_directory($context) {
-		$path = $this->clean_path($context->request->full_path);
+		$path = $this->clean_dir($context->request->full_path);
 		$id = $this->resolve_directory($path);
 		
-		$path = new Path();
-		$path->id = $id;
+		$dir = new Dir();
+		$dir->id = $id;
 		
-		$path->delete($this->model);
+		$dir->delete($this->model);
 	}
 	
 	public function file_info($context) {

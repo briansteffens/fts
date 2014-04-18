@@ -40,7 +40,7 @@ require_once($request->content_type.".handler.php");
 // Get the resource descriptor
 switch ($request->resource_type) {
 	case "directory":
-		$request->descriptor = new Path();
+		$request->descriptor = new Dir();
 		break;
 	case "file":
 		//$request->descriptor = new File();
