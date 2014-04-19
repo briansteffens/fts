@@ -25,10 +25,10 @@ class Api {
 		$this->model = $model;
 	}
 
-	public function resolve_directory_part($parent_id, $path_name) {
+	public function resolve_path_part($parent_id, $path_name) {
 		$q = $this->model->query(
-			"select id from directories ".
-			"where parent_id=? and directory_name=? ".
+			"select id from nodes ".
+			"where parent_id=? and name=? ".
 			"limit 1;",
 			"is", $parent_id, $path_name
 			);
@@ -43,12 +43,15 @@ class Api {
 		return $q->row["id"];
 	}
 	
-	public function resolve_directory($full_path) {
+	public function resolve_path($full_path) {
+		if ($full_path === "" || $full_path === "/")
+			return 0; # root directory ID
+	
 		$path_parts = explode("/", $full_path);
 		
 		$parent_id = 0; // Start at root
 		foreach ($path_parts as $path_part) {
-			$parent_id = $this->resolve_directory_part($parent_id, $path_part);
+			$parent_id = $this->resolve_path_part($parent_id, $path_part);
 		}
 		
 		return $parent_id;
@@ -62,21 +65,17 @@ class Api {
 
 	public function create_directory($context) {
 		# Get the new directory's parent directory
-		$path_parts = explode("/", $context->request->full_path);
-		$path_parts = array_filter($path_parts, "strlen");
-		$new_path_name = array_slice($path_parts, -1)[0];
-		$path_parts = array_slice($path_parts, 0, -1);
-		$parent_path = implode("/", $path_parts);
+		$parent_path = Node::path_up_one_level($context->request->full_path);
 		
 		$parent_id = 0;
 		if ($parent_path !== "") {
-			$parent_id = $this->resolve_directory($parent_path);
+			$parent_id = $this->resolve_path($parent_path);
 		}
 		
 		# Make sure the new directory doesn't already exist
 		$directory_exists = True;
 		try {
-			$this->resolve_directory_part($parent_id, $new_path_name);
+			$this->resolve_path_part($parent_id, $new_path_name);
 		} catch (FtsServerException $e) {
 			if ($e->http_status_code === 404) {
 				$directory_exists = False;
@@ -89,15 +88,16 @@ class Api {
 		
 		$descriptor = $context->request->descriptor;
 		
-		$descriptor->directory_name = $new_path_name;
+		$descriptor->name = $new_path_name;
 		$descriptor->parent_id = $parent_id;
+		$descriptor->date_created = date("Y-m-d H:i:s");
 		
 		$descriptor->insert($this->model);
 	}
 
 	public function update_directory($context) {
 		$path = $this->clean_path($context->request->full_path);
-		$id = $this->resolve_directory($path);
+		$id = $this->resolve_path($path);
 		
 		$dir = Dir::get_by_id($this->model, $id);
 		
@@ -120,27 +120,42 @@ class Api {
 
 	public function list_directory($context) {
 		$path = $this->clean_path($context->request->full_path);
-		$id = $this->resolve_directory($path);
+		$id = $this->resolve_path($path);
 		
 		$q = $this->model->query(
-			"select * from directories where parent_id = ?;", "i", $id);
+			"select * from nodes where `parent_id` = ? order by `type`;", 
+			"i", 
+			$id);
+		
+		$nodes = array();
+		
+		try {
+			$context->result->node_list_parent = Node::get_by_id(
+				$this->model, 
+				$context->request->node->parent_id
+				);
+		} catch (FtsServerException $e) {
+			if ($e->http_status_code !== 404)
+				throw $e;
+		}
 		
 		while ($q->read()) {
-			$dir = new Dir();
-			$dir->select($q->row);
-			echo $dir->directory_name."<br />";
+			$node = new Node();
+			$node->select($q->row);
+			$nodes[] = $node;
 		}
+		
+		$context->result->node_list = $nodes;
 		
 		$q->close();
 	}
 	
 	public function delete_directory($context) {
-		$path = $this->clean_dir($context->request->full_path);
-		$id = $this->resolve_directory($path);
+		$path = $this->clean_path($context->request->full_path);
+		$id = $this->resolve_path($path);
 		
 		$dir = new Dir();
 		$dir->id = $id;
-		
 		$dir->delete($this->model);
 	}
 	

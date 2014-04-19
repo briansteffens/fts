@@ -3,28 +3,19 @@
 require_once("config.php");
 require_once("shared.php");
 require_once("model.php");
-/*
-$model = new Model();
 
-$p1 = Path::get_by_id($model, 32);
-$p1->user = "^_^";
-var_dump($p1);
-$p1->update($model);
-
-$model->close();
-exit;
-*/
 $request = new stdClass;
 
 $request->method = $_SERVER['REQUEST_METHOD'];
-$request->full_path = $_GET["url"];
 
-// Figure out the kind of resource (directory/file/chunk)
-$request->resource_type = "file";
+$request->full_path = $_GET["url"];
+if ($request->full_path === "")
+	$request->full_path = "/";
+
+// Figure out the kind of resource (node/chunk)
+$request->resource_type = "node";
 $request->chunk_index = NULL;
-if (substr($request->full_path, -1) === "/")
-	$request->resource_type = "directory";
-elseif (isset($_GET["chunk"])) {
+if (isset($_GET["chunk"])) {
 	$request->resource_type = "chunk";
 	$request->chunk_index = $_GET["chunk"];
 }
@@ -38,33 +29,41 @@ if (isset($_GET["json"]))
 require_once($request->content_type.".handler.php");
 
 // Get the resource descriptor
-switch ($request->resource_type) {
-	case "directory":
-		$request->descriptor = new Dir();
-		break;
-	case "file":
-		//$request->descriptor = new File();
-		break;
-}
+$request->descriptor = new Node();
 $request->descriptor->user = "brian";
 $request->descriptor->group = "users";
-$request->descriptor->mask = "0755";
+$request->descriptor->mask = "755";
 Handler::set_resource_descriptor($request);
 
 $context = new stdClass;
 $context->request = $request;
 
-$model = new Model();
-$api = new Api($context, $model);
-
 $context->result = new stdClass;
 $context->result->status_code = 200;
 $context->result->message = "";
 
+$model = new Model();
+$api = new Api($context, $model);
+
+$node_id = NULL;
+$request->node = NULL;
+$request->node_type = NULL;
+try {
+	$node_id = $api->resolve_path($request->full_path);
+	$request->node = Node::get_by_id($api->model, $node_id);
+	$request->node_type = $request->node->type;
+} catch (FtsServerException $e) {
+	if ($e->http_status_code !== 404)
+		throw $e;
+		
+	if (isset($request->descriptor->type))
+		$request->node_type = $request->descriptor->type;
+}
+
 // Dispatch
 try {
-	switch ($context->request->resource_type) {
-		case "directory":
+	switch ($request->node_type) {
+		case "dir":
 			switch ($context->request->method) {
 				case "GET":
 					$api->list_directory($context);

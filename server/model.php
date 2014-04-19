@@ -1,70 +1,103 @@
 <?php
 
-class Dir extends Entity {
-	
-	var $id = NULL;
-	var $directory_name;
+class Node extends Entity {
+
 	var $parent_id;
+	var $type;
+	var $name;
+	var $date_created;
+
+	// Permissions	
 	var $user;
 	var $group;
 	var $mask;
 	
+	// File only
+	var $file_size;
+	var $chunk_size;
+	var $file_hash;
+
 	public static function table_name() {
-		return "directories";
+		return "nodes";
 	}
 	
 	public static function entity_name() {
-		return "Dir";
+		return "Node";
 	}
 	
 	public function select($row) {
 		$this->id = $row["id"];
-		$this->directory_name = $row["directory_name"];
 		$this->parent_id = $row["parent_id"];
-		$this->user = $row["p_user"];
-		$this->group = $row["p_group"];
-		$this->mask = $row["p_mask"];
+		$this->type = $row["type"];
+		$this->name = $row["name"];
+		$this->user = $row["user"];
+		$this->group = $row["group"];
+		$this->mask = $row["read"].$row["write"].$row["execute"];
+		$this->date_created = $row["date_created"];
+		$this->file_size = $row["file_size"];
+		$this->chunk_size = $row["chunk_size"];
+		$this->file_hash = $row["file_hash"];
 	}
 	
 	protected function sql_insert() {
 		return [
-			"insert into ".static::table_name()." ".
-			"(directory_name,parent_id,p_user,p_group,p_mask) ".
-			"values (?,?,?,?,?);",
-			"sisss",
-			$this->directory_name,
+			"insert into ".static::table_name()." (".
+			"`parent_id`,`type`,`name`,`user`,`group`,`read`,`write`,".
+			"`execute`,`date_created`,`file_size`,`chunk_size`,`file_hash`".
+			") values (?,?,?,?,?,?,?,?,?,?,?,?);",
+			"issssiiisiis",
 			$this->parent_id,
+			$this->type,
+			$this->name,
 			$this->user,
 			$this->group,
-			$this->mask
+			intval($this->mask[0]),
+			intval($this->mask[1]),
+			intval($this->mask[2]),
+			$this->date_created,
+			$this->file_size,
+			$this->chunk_size,
+			$this->file_hash
 			];
 	}
 	
 	protected function sql_update() {
 		return [
 			"update ".static::table_name()." set ".
-			"directory_name = ?, ".
-			"parent_id = ?, ".
-			"p_user = ?, ".
-			"p_group = ?, ".
-			"p_mask = ? ".
+			"parent_id = ?,".
+			"type = ?,".
+			"name = ?,".
+			"user = ?,".
+			"group = ?,".
+			"read = ?,".
+			"write = ?,",
+			"execute = ?,",
+			"date_created = ?,".
+			"file_size = ?,".
+			"chunk_size = ?,".
+			"file_hash = ? ".
 			"where id = ?",
-			"sisssi",
-			$this->directory_name,
+			"issssssiisi",
 			$this->parent_id,
+			$this->type,
+			$this->name,
 			$this->user,
 			$this->group,
-			$this->mask,
+			$this->date_created,
+			$this->file_size,
+			$this->chunk_size,
+			$this->file_hash,
 			$this->id
 			];
 	}
-	
-}
 
-
-class File extends Entity {
-
-
+	public static function path_up_one_level($path) {
+		$path_parts = explode("/", $path);
+		$path_parts = array_filter($path_parts, "strlen");
+		$new_path_name = array_slice($path_parts, -1)[0];
+		$path_parts = array_slice($path_parts, 0, -1);
+		return implode("/", $path_parts);
+	}
 
 }
 
@@ -80,8 +113,6 @@ class Entity {
 	public static function entity_name() {
 		throw new FtsServerException(500, "Not implemented.");
 	}
-	
-	
 	
 	public static function sql_get_by_id($id) {
 		return [
@@ -112,7 +143,6 @@ class Entity {
 	}
 
 
-
 	protected function sql_insert() {
 		throw new FtsServerException(500, "Not implemented.");
 	}
@@ -135,7 +165,6 @@ class Entity {
 	}
 	
 	
-	
 	protected function sql_update() {
 		throw new FtsServerException(500, "Not implemented.");
 	}
@@ -155,8 +184,15 @@ class Entity {
 				"Unknown error updating ".static::entity_name().
 				" '".$this->id."'");
 	}
-
-
+	
+	
+	protected function sql_delete() {
+		return [
+			"delete from ".static::table_name()." where id = ?",
+			"i",
+			$this->id
+		];
+	}
 
 	public function delete($model) {
 		if (!isset($this->id))
@@ -164,12 +200,7 @@ class Entity {
 				static::entity_name()." can't be deleted: ".
 				"it doesn't have an ID.");
 		
-		$q = $model->query(
-			"delete from ".static::table_name()." where id = ?",
-			"i",
-			$this->id
-			);
-		
+		$q = $model->query($this->sql_delete());
 		$q->execute();
 		$q->close();
 		

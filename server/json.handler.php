@@ -13,8 +13,8 @@ class Handler {
 		
 		$descriptor = json_decode($post_body);
 		
-		if (isset($descriptor->id))
-			$request->descriptor->id = $descriptor->id;
+		if (isset($descriptor->type))
+			$request->descriptor->type = $descriptor->type;
 		
 		if (isset($descriptor->user))
 			$request->descriptor->user = $descriptor->user;
@@ -24,20 +24,18 @@ class Handler {
 		
 		if (isset($descriptor->mask))
 			$request->descriptor->mask = $descriptor->mask;
-		
-		if ($request->resource_type === "file") {	
-			if (isset($descriptor->file_size))
-				$request->descriptor->file_size = $descriptor->file_size;
+	
+		if (isset($descriptor->file_size))
+			$request->descriptor->file_size = $descriptor->file_size;
 
-			if (isset($descriptor->chunk_size))
-				$request->descriptor->chunk_size = $descriptor->chunk_size;
+		if (isset($descriptor->chunk_size))
+			$request->descriptor->chunk_size = $descriptor->chunk_size;
 
-			if (isset($descriptor->file_hash))
-				$request->descriptor->file_hash = $descriptor->file_hash;
+		if (isset($descriptor->file_hash))
+			$request->descriptor->file_hash = $descriptor->file_hash;
 
-			if (isset($descriptor->chunk_hashes))
-				$request->descriptor->chunk_hashes = $descriptor->chunk_hashes;		
-		}
+		if (isset($descriptor->chunk_hashes))
+			$request->descriptor->chunk_hashes = $descriptor->chunk_hashes;		
 	}
 	
 	public static function process_response($context) {
