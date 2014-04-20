@@ -3,6 +3,7 @@
 require_once("config.php");
 require_once("shared.php");
 require_once("model.php");
+require_once("auth.php");
 
 $request = new stdClass;
 
@@ -28,15 +29,18 @@ if (isset($_GET["json"]))
 // Import the appropriate content_type handler.
 require_once($request->content_type.".handler.php");
 
-// Get the resource descriptor
-$request->descriptor = new Node();
-$request->descriptor->user = "brian";
-$request->descriptor->group = "users";
-$request->descriptor->mask = "755";
-Handler::set_resource_descriptor($request);
-
 $context = new stdClass;
 $context->request = $request;
+
+$context->auth = new Auth();
+$context->auth->check_for_credentials($context);
+
+// Get the resource descriptor
+$request->descriptor = new Node();
+$request->descriptor->user = $context->auth->user;
+$request->descriptor->group = $context->auth->groups[0];
+$request->descriptor->mask = "755";
+Handler::set_resource_descriptor($request);
 
 $context->result = new stdClass;
 $context->result->status_code = 200;
@@ -48,10 +52,16 @@ $api = new Api($context, $model);
 $node_id = NULL;
 $request->node = NULL;
 $request->node_type = NULL;
+$request->node_parent = NULL;
 try {
 	$node_id = $api->resolve_path($request->full_path);
 	$request->node = Node::get_by_id($api->model, $node_id);
 	$request->node_type = $request->node->type;
+	
+	if (isset($request->node->parent_id)) {
+		$request->node_parent = Node::get_by_id(
+			$api->model, $request->node->parent_id);
+	}
 } catch (FtsServerException $e) {
 	if ($e->http_status_code !== 404)
 		throw $e;
@@ -60,8 +70,22 @@ try {
 		$request->node_type = $request->descriptor->type;
 }
 
-// Dispatch
 try {
+	// Check permission
+	try {
+		$context->auth->check_node_permission($context);
+	} catch (FtsAuthException $e) {
+		if (!isset($_SERVER["PHP_AUTH_USER"]) && $context->auth->user === "anon") {
+			header('WWW-Authenticate: Basic realm="FTS Realm"');
+			header('HTTP/1.0 401 Unauthorized');
+			echo "?!";
+			exit;
+		}
+	
+		throw new FtsAuthException(403, "Forbidden");
+	}
+	
+	// Dispatch
 	switch ($request->node_type) {
 		case "dir":
 			switch ($context->request->method) {

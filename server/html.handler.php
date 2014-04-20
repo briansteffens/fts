@@ -66,8 +66,10 @@ class Handler {
 				Handler::echo_node($context->result->node_list_parent, "..");
 			}
 			foreach ($context->result->node_list as $node) {
-				$node->url = $config["server_url"].
-					$current_path."/".$node->name;
+				$temp = $config["server_url"].$current_path;
+				if (substr($temp, -1) !== "/")
+					$temp .= "/";
+				$node->url = $temp.$node->name;
 				Handler::echo_node($node);
 			}
 			echo "</table>";
@@ -86,7 +88,7 @@ class Handler {
 		echo "<td>".$node->type."</td>";
 		echo "<td>".$node->user."</td>";
 		echo "<td>".$node->group."</td>";
-		echo "<td>".$node->mask."</td>";
+		echo "<td>".$node->permissions."</td>";
 		echo "<td>".$node->date_created."</td>";			
 		echo "</tr>";
 	}

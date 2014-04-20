@@ -10,7 +10,7 @@ class Node extends Entity {
 	// Permissions	
 	var $user;
 	var $group;
-	var $mask;
+	var $permissions;
 	
 	// File only
 	var $file_size;
@@ -32,7 +32,7 @@ class Node extends Entity {
 		$this->name = $row["name"];
 		$this->user = $row["user"];
 		$this->group = $row["group"];
-		$this->mask = $row["read"].$row["write"].$row["execute"];
+		$this->permissions = $row["permissions"];
 		$this->date_created = $row["date_created"];
 		$this->file_size = $row["file_size"];
 		$this->chunk_size = $row["chunk_size"];
@@ -42,18 +42,16 @@ class Node extends Entity {
 	protected function sql_insert() {
 		return [
 			"insert into ".static::table_name()." (".
-			"`parent_id`,`type`,`name`,`user`,`group`,`read`,`write`,".
-			"`execute`,`date_created`,`file_size`,`chunk_size`,`file_hash`".
-			") values (?,?,?,?,?,?,?,?,?,?,?,?);",
-			"issssiiisiis",
+			"`parent_id`,`type`,`name`,`user`,`group`,`permissions`,".
+			"`date_created`,`file_size`,`chunk_size`,`file_hash`".
+			") values (?,?,?,?,?,?,?,?,?,?);",
+			"issssssiis",
 			$this->parent_id,
 			$this->type,
 			$this->name,
 			$this->user,
 			$this->group,
-			intval($this->mask[0]),
-			intval($this->mask[1]),
-			intval($this->mask[2]),
+			$this->permissions,
 			$this->date_created,
 			$this->file_size,
 			$this->chunk_size,
@@ -69,9 +67,7 @@ class Node extends Entity {
 			"name = ?,".
 			"user = ?,".
 			"group = ?,".
-			"read = ?,".
-			"write = ?,",
-			"execute = ?,",
+			"permissions = ?,".
 			"date_created = ?,".
 			"file_size = ?,".
 			"chunk_size = ?,".
@@ -83,6 +79,7 @@ class Node extends Entity {
 			$this->name,
 			$this->user,
 			$this->group,
+			$this->permissions,
 			$this->date_created,
 			$this->file_size,
 			$this->chunk_size,
