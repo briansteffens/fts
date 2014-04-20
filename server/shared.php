@@ -44,6 +44,8 @@ class Api {
 	}
 	
 	public function resolve_path($full_path) {
+		$full_path = $this->clean_path($full_path);
+	
 		if ($full_path === "" || $full_path === "/")
 			return 0; # root directory ID
 	
@@ -65,7 +67,11 @@ class Api {
 
 	public function create_directory($context) {
 		# Get the new directory's parent directory
-		$parent_path = Node::path_up_one_level($context->request->full_path);
+		$parts = explode("/", $context->request->full_path);
+		$parts = array_filter($parts, "strlen");
+		$new_path_name = $parts[count($parts) - 1];
+		$parts = array_slice($parts, 0, -1);
+		$parent_path = implode("/", $parts);
 		
 		$parent_id = 0;
 		if ($parent_path !== "") {
@@ -99,7 +105,7 @@ class Api {
 		$path = $this->clean_path($context->request->full_path);
 		$id = $this->resolve_path($path);
 		
-		$dir = Dir::get_by_id($this->model, $id);
+		$dir = Node::get_by_id($this->model, $id);
 		
 		$d = $context->request->descriptor;
 		
@@ -145,6 +151,7 @@ class Api {
 			$nodes[] = $node;
 		}
 		
+		$context->result->node = $context->request->node;
 		$context->result->node_list = $nodes;
 		
 		$q->close();
@@ -153,10 +160,9 @@ class Api {
 	public function delete_directory($context) {
 		$path = $this->clean_path($context->request->full_path);
 		$id = $this->resolve_path($path);
-		
-		$dir = new Dir();
-		$dir->id = $id;
-		$dir->delete($this->model);
+
+		$node = Node::get_by_id($this->model, $id);
+		$node->delete($this->model);
 	}
 	
 	public function file_info($context) {

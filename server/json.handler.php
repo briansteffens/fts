@@ -47,6 +47,15 @@ class Handler {
 		
 		$container = new stdClass;
 		$container->result = $result;
+		$container->response = new stdClass;
+		
+		if (isset($context->result->node)) {
+			$container->response->node = $context->result->node;
+		}
+		
+		if (isset($context->result->node_list)) {
+			$container->response->node_list = $context->result->node_list;
+		}
 		
 		echo json_encode(get_object_vars($container));
 	}

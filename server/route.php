@@ -39,7 +39,7 @@ $context->auth->check_for_credentials($context);
 $request->descriptor = new Node();
 $request->descriptor->user = $context->auth->user;
 $request->descriptor->group = $context->auth->groups[0];
-$request->descriptor->mask = "755";
+$request->descriptor->permissions = "755";
 Handler::set_resource_descriptor($request);
 
 $context->result = new stdClass;
@@ -53,11 +53,11 @@ $node_id = NULL;
 $request->node = NULL;
 $request->node_type = NULL;
 $request->node_parent = NULL;
+
 try {
 	$node_id = $api->resolve_path($request->full_path);
 	$request->node = Node::get_by_id($api->model, $node_id);
 	$request->node_type = $request->node->type;
-	
 	if (isset($request->node->parent_id)) {
 		$request->node_parent = Node::get_by_id(
 			$api->model, $request->node->parent_id);
@@ -65,12 +65,20 @@ try {
 } catch (FtsServerException $e) {
 	if ($e->http_status_code !== 404)
 		throw $e;
-		
 	if (isset($request->descriptor->type))
 		$request->node_type = $request->descriptor->type;
 }
 
+if (!isset($request->node) && $request->method === "POST") {
+	$parent_path = Node::path_up_one_level($request->full_path);
+	$request->node_parent = Node::get_by_id($api->model, $parent_path);
+}
+
 try {
+	if ($request->method !== "POST" && !isset($request->node)) {
+		throw new FtsServerException(404, "File not found");
+	}
+
 	// Check permission
 	try {
 		$context->auth->check_node_permission($context);
@@ -78,7 +86,6 @@ try {
 		if (!isset($_SERVER["PHP_AUTH_USER"]) && $context->auth->user === "anon") {
 			header('WWW-Authenticate: Basic realm="FTS Realm"');
 			header('HTTP/1.0 401 Unauthorized');
-			echo "?!";
 			exit;
 		}
 	

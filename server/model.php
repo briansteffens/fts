@@ -61,18 +61,18 @@ class Node extends Entity {
 	
 	protected function sql_update() {
 		return [
-			"update ".static::table_name()." set ".
-			"parent_id = ?,".
-			"type = ?,".
-			"name = ?,".
-			"user = ?,".
-			"group = ?,".
-			"permissions = ?,".
-			"date_created = ?,".
-			"file_size = ?,".
-			"chunk_size = ?,".
-			"file_hash = ? ".
-			"where id = ?",
+			"update `".static::table_name()."` set ".
+			"`parent_id` = ?,".
+			"`type` = ?,".
+			"`name` = ?,".
+			"`user` = ?,".
+			"`group` = ?,".
+			"`permissions` = ?,".
+			"`date_created` = ?,".
+			"`file_size` = ?,".
+			"`chunk_size` = ?,".
+			"`file_hash` = ? ".
+			"where `id` = ?",
 			"issssssiisi",
 			$this->parent_id,
 			$this->type,
@@ -91,7 +91,6 @@ class Node extends Entity {
 	public static function path_up_one_level($path) {
 		$path_parts = explode("/", $path);
 		$path_parts = array_filter($path_parts, "strlen");
-		$new_path_name = array_slice($path_parts, -1)[0];
 		$path_parts = array_slice($path_parts, 0, -1);
 		return implode("/", $path_parts);
 	}

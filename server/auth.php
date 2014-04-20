@@ -33,15 +33,13 @@ class Auth {
 
 	public function check_node_permission($context) {
 		if ($this->user === "root")
-			return TRUE;
-		
+			return;
 		
 		$target = $context->request->node;
 		
 		// Inserts need the parent node's permissions checked
 		if ($context->request->method === "POST")
 			$target = $context->request->node_parent;
-		
 		
 		// GET requires read access
 		$permission_required = "r";
@@ -50,14 +48,13 @@ class Auth {
 		if ($context->request->method !== "GET")
 			$permission_required = "w";
 		
-		
 		// Get all the permission components (u/g/o) the user matches.
 		$checks = array();
 		if ($target->user == $this->user)
-			$checks[] = $context->request->node->permissions[0];
+			$checks[] = $target->permissions[0];
 		if (in_array($target->group, $this->groups))
-			$checks[] = $context->request->node->permissions[1];
-		$checks[] = $context->request->node->permissions[2];
+			$checks[] = $target->permissions[1];
+		$checks[] = $target->permissions[2];
 		
 		foreach ($checks as $check)
 			if (in_array($permission_required, $this->get_permissions($check)))
