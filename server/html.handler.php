@@ -12,8 +12,8 @@ class Handler {
 		if (isset($_GET["group"]))
 			$request->descriptor->group = $_GET["group"];
 
-		if (isset($_GET["bitmask"]))
-			$request->descriptor->bitmask = $_GET["bitmask"];
+		if (isset($_GET["permissions"]))
+			$request->descriptor->permissions = $_GET["permissions"];
 
 		if (isset($_GET["file_size"]))
 			$request->descriptor->file_size = $_GET["file_size"];

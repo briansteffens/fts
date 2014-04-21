@@ -1,5 +1,82 @@
 <?php
 
+class Chunk extends Entity {
+	
+	var $node_id;
+	var $index;
+	var $hash;
+	var $chunk;
+	
+	public static function table_name() {
+		return "chunks";
+	}
+	
+	public static function entity_name() {
+		return "Chunk";
+	}
+	
+	public static function get_by_index($model, $node_id, $index) {
+		$q = $model->query([
+			"select * from `".static::table_name()."` ".
+			"where `node_id` = ? and `index` = ? limit 1;",
+			"ii",
+			$node_id,
+			$index
+			]);
+		
+		if (!$q->read())
+			throw new FtsServerException(404, 
+				static::entity_name()." not found.");
+		
+		$q->close();
+		
+		$ret = new Chunk();
+		$ret->select($q->row);
+		return $ret;
+	}
+	
+	public function select($row) {
+		$this->id = $row["id"];
+		$this->node_id = $row["node_id"];
+		$this->index = $row["index"];
+		$this->hash = $row["hash"];
+		$this->chunk = $row["chunk"];
+	}
+	
+	protected function sql_insert() {
+		$null = NULL;
+		return [
+			"insert into ".static::table_name()." (".
+			"`node_id`,`index`,`hash`,`chunk`".
+			") values (?,?,?,?);",
+			"iiss",
+			$this->node_id,
+			$this->index,
+			$this->hash,
+			$this->chunk
+			];
+	}
+	
+	protected function sql_update() {
+		$null = NULL;
+		return [
+			"update `".static::table_name()."` set ".
+			"`node_id` = ?,".
+			"`index` = ?,".
+			"`hash` = ?,".
+			"`chunk` = ? ".
+			"where `id` = ?",
+			"iissi",
+			$this->node_id,
+			$this->index,
+			$this->hash,
+			$this->chunk,
+			$this->id
+			];
+	}
+	
+}
+
 class Node extends Entity {
 
 	var $parent_id;
@@ -23,6 +100,10 @@ class Node extends Entity {
 	
 	public static function entity_name() {
 		return "Node";
+	}
+	
+	public function get_total_chunks() {
+		return intval(ceil($this->file_size / $this->file_hash));
 	}
 	
 	public function select($row) {
@@ -143,15 +224,20 @@ class Entity {
 		throw new FtsServerException(500, "Not implemented.");
 	}
 
+	protected function inner_insert($model) {
+		$q = $model->query($this->sql_insert());
+		$q->execute();
+		$q->close();
+		return $q;
+	}
+
 	public function insert($model) {
 		if (isset($this->id))
 			throw new FtsServerException(500,
 				static::entity_name()." can't be inserted, ".
 				"it already has an ID: '".$this->id."'");
 		
-		$q = $model->query($this->sql_insert());
-		$q->execute();
-		$q->close();
+		$q = $this->inner_insert($model);
 		
 		if ($q->affected_rows != 1)
 			throw new FtsServerException(500, 
@@ -165,15 +251,20 @@ class Entity {
 		throw new FtsServerException(500, "Not implemented.");
 	}
 	
+	protected function inner_update($model) {
+		$q = $model->query($this->sql_update());
+		$q->execute();
+		$q->close();
+		return $q;
+	}
+	
 	public function update($model) {
 		if (!isset($this->id))
 			throw new FtsServerException(500,
 				static::entity_name()." can't be updated, ".
 				"it doesn't have an ID.");
 		
-		$q = $model->query($this->sql_update());
-		$q->execute();
-		$q->close();
+		$q = $this->inner_update($model);
 		
 		if ($q->affected_rows > 1)
 			throw new FtsServerException(500, 

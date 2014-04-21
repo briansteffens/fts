@@ -65,7 +65,7 @@ class Api {
 		return implode("/", $parts);
 	}
 
-	public function create_directory($context) {
+	public function create_node($context) {
 		# Get the new directory's parent directory
 		$parts = explode("/", $context->request->full_path);
 		$parts = array_filter($parts, "strlen");
@@ -89,7 +89,7 @@ class Api {
 		}
 		
 		if ($directory_exists)
-			throw new FtsServerException(409, "Cannot create directory '".
+			throw new FtsServerException(409, "Cannot create node '".
 				$context->request->full_path."': File exists");
 		
 		$descriptor = $context->request->descriptor;
@@ -97,6 +97,13 @@ class Api {
 		$descriptor->name = $new_path_name;
 		$descriptor->parent_id = $parent_id;
 		$descriptor->date_created = date("Y-m-d H:i:s");
+		
+		if ($context->request->content_type === "" &&
+			isset($context->request->post_body)) {
+			$descriptor->type = "file";
+			$descriptor->file_size = strlen($context->request->post_body);
+			$descriptor->chunk_size = $descriptor->file_size;
+		}
 		
 		$descriptor->insert($this->model);
 	}
@@ -117,9 +124,9 @@ class Api {
 			
 		if (isset($d->group))
 			$dir->group = $d->group;
-			
-		if (isset($d->mask))
-			$dir->mask = $d->mask; 
+		
+		if (isset($d->permissions))
+			$dir->permissions = $d->permissions; 
 		
 		$dir->update($this->model);
 	}
@@ -155,6 +162,30 @@ class Api {
 		$context->result->node_list = $nodes;
 		
 		$q->close();
+	}
+	
+	public function get_file($context) {
+		$path = $this->clean_path($context->request->full_path);
+		$id = $this->resolve_path($path);
+		
+		if ($context->request->content_type === "json") {
+			$context->result->node = $context->request->node;
+			return;
+		}
+		
+		if ($context->request->content_type === "") {
+			$total_chunks = $context->request->node->get_by_index();
+			for ($index = 0; $index < $total_chunks; $index++) {
+				$chunk = Chunk::get_by_index(
+					$context->request->node->id, 
+					$index
+					);
+					
+				echo $chunk->chunk;
+				flush();
+			}
+			return;
+		}
 	}
 	
 	public function delete_directory($context) {

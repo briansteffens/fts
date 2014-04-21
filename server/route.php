@@ -22,12 +22,14 @@ if (isset($_GET["chunk"])) {
 }
 
 // Get the expected response content type.
-$request->content_type = "html";
+$request->content_type = "";
 if (isset($_GET["json"]))
 	$request->content_type = "json";
+elseif (isset($_GET["html"]))
+	$request->content_type = "html";
 
 // Import the appropriate content_type handler.
-require_once($request->content_type.".handler.php");
+require_once("json.handler.php");
 
 $context = new stdClass;
 $context->request = $request;
@@ -92,36 +94,35 @@ try {
 		throw new FtsAuthException(403, "Forbidden");
 	}
 	
-	// Dispatch
-	switch ($request->node_type) {
-		case "dir":
-			switch ($context->request->method) {
-				case "GET":
-					$api->list_directory($context);
-					break;
-				case "POST":
-					$api->create_directory($context);
-					break;
-				case "PUT":
-					$api->update_directory($context);
-					break;
-				case "DELETE":
-					$api->delete_directory($context);
-					break;
-			}
+	if ($context->request->method == "POST") {
+		$api->create_node($context);
+	} else {
+		// Old? dispatch
+		switch ($request->node_type) {
+			case "dir":
+				switch ($context->request->method) {
+					case "GET":
+						$api->list_directory($context);
+						break;
+					case "PUT":
+						$api->update_directory($context);
+						break;
+					case "DELETE":
+						$api->delete_directory($context);
+						break;
+				}
 			
-			break;
+				break;
 			
-		case "file":
-			if ($context->request->method === "GET") {
-				// Download file metadata
-			} elseif ($context->request->method === "PUT") {
-				// Upload file digest (start chunked create/update file)
-			} elseif ($context->request->method === "DELETE") {
-				// Delete file
-			}
+			case "file":
+				switch ($context->request->method) {
+					case "GET":
+						$api->get_file($context);
+						break;
+				}
 			
-			break;
+				break;
+		}
 	}
 } catch (FtsServerException $e) {
 	$context->result->status_code = $e->http_status_code;

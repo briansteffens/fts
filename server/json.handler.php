@@ -6,12 +6,15 @@ class Handler {
 		if ($request->method !== "POST" && $request->method !== "PUT")
 			return;
 	
-		$post_body = file_get_contents('php://input');
+		$request->post_body = file_get_contents('php://input');
 
-		if (!isset($post_body))
+		if (!isset($request->post_body))
 			return;
 		
-		$descriptor = json_decode($post_body);
+		$descriptor = json_decode($request->post_body);
+		
+		if (!$descriptor)
+			return;
 		
 		if (isset($descriptor->type))
 			$request->descriptor->type = $descriptor->type;
@@ -22,8 +25,8 @@ class Handler {
 		if (isset($descriptor->group))
 			$request->descriptor->group = $descriptor->group;
 		
-		if (isset($descriptor->mask))
-			$request->descriptor->mask = $descriptor->mask;
+		if (isset($descriptor->permissions))
+			$request->descriptor->permissions = $descriptor->permissions;
 	
 		if (isset($descriptor->file_size))
 			$request->descriptor->file_size = $descriptor->file_size;
