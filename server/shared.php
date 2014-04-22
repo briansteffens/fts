@@ -9,11 +9,39 @@ class FtsServerException extends RuntimeException {
 	}
 }
 
+
+
 class FtsDataException extends FtsServerException {
 	public function __construct($http_status_code, $message='', $code=0) {
 		return parent::__construct($http_status_code, $message, $code);
 	}
 }
+
+
+
+class Util {
+
+	public static function rand($min, $max) {
+		$range = $max - $min;
+		if ($range == 0) return $min; // not so random...
+		$log = log($range, 2);
+		$bytes = (int) ($log / 8) + 1; // length in bytes
+		$bits = (int) $log + 1; // length in bits
+		$filter = (int) (1 << $bits) - 1; // set all lower bits to 1
+		do {
+		    $rnd = hexdec(bin2hex(openssl_random_pseudo_bytes($bytes, $s)));
+		    $rnd = $rnd & $filter; // discard irrelevant bits
+		} while ($rnd >= $range);
+		return $min + $rnd;
+	}
+	
+	public static function now() {
+		return date("Y-m-d H:i:s");
+	}
+	
+}
+
+
 
 class Api {
 
@@ -66,6 +94,8 @@ class Api {
 	}
 
 	public function create_node($context) {
+		global $config;
+	
 		# Get the new directory's parent directory
 		$parts = explode("/", $context->request->full_path);
 		$parts = array_filter($parts, "strlen");
@@ -96,16 +126,72 @@ class Api {
 		
 		$descriptor->name = $new_path_name;
 		$descriptor->parent_id = $parent_id;
-		$descriptor->date_created = date("Y-m-d H:i:s");
-		
-		if ($context->request->content_type === "" &&
-			isset($context->request->post_body)) {
+		$descriptor->date_created = Util::now();		
+
+		if ($context->request->content_type === "") {
 			$descriptor->type = "file";
-			$descriptor->file_size = strlen($context->request->post_body);
-			$descriptor->chunk_size = $descriptor->file_size;
+		}
+		
+		if ($descriptor->type === "file") {
+			if (isset($descriptor->file_size) && 
+				!isset($descriptor->chunk_size)) {
+				$descriptor->chunk_size = $descriptor->file_size;
+				if ($descriptor->chunk_size > $config["max_chunk_size"])
+					$descriptor->chunk_size = $config["max_chunk_size"];
+			}
+			$descriptor->date_created = NULL;
 		}
 		
 		$descriptor->insert($this->model);
+
+		if ($context->request->content_type === "json" &&
+			$descriptor->type === "file") {
+			$chunk_index = 0;
+			foreach ($descriptor->chunk_hashes as $chunk_hash) {
+				$chunk = new Chunk();
+				$chunk->node_id = $descriptor->id;
+				$chunk->index = $chunk_index;
+				$chunk->hash = $chunk_hash;
+				$chunk->insert($this->model);
+				
+				$chunk_index++;
+			}
+			$chunk_index++;
+		}
+
+		if ($context->request->content_type !== "")
+			return;
+		
+		if ($context->request->content_type === "") {
+			$post = fopen("php://input", "r");
+			$file_size = 0;
+			$chunk_size = $config["max_chunk_size"];
+			$chunk_index = 0;
+			while (!feof($post)) {
+				$buffer = fread($post, $chunk_size);
+				if (!$buffer)
+					break;
+				$file_size += strlen($buffer);
+				
+				$chunk = new Chunk();
+				$chunk->node_id = $descriptor->id;
+				$chunk->index = $chunk_index;
+				$chunk->hash = "some";
+				$chunk->chunk = $buffer;
+				$chunk->insert($this->model);
+				
+				$chunk_index++;
+			}
+			
+			fclose($post);
+			
+			$descriptor->file_size = $file_size;
+			$descriptor->chunk_size = $chunk_size;
+			if ($descriptor->chunk_size > $descriptor->file_size)
+				$descriptor->chunk_size = $descriptor->file_size;
+			$descriptor->date_created = date("Y-m-d H:i:s");
+			$descriptor->update($this->model);
+		}
 	}
 
 	public function update_directory($context) {
@@ -165,8 +251,8 @@ class Api {
 	}
 	
 	public function get_file($context) {
-		$path = $this->clean_path($context->request->full_path);
-		$id = $this->resolve_path($path);
+		//$path = $this->clean_path($context->request->full_path);
+		//$id = $this->resolve_path($path);
 		
 		if ($context->request->content_type === "json") {
 			$context->result->node = $context->request->node;
@@ -174,9 +260,13 @@ class Api {
 		}
 		
 		if ($context->request->content_type === "") {
-			$total_chunks = $context->request->node->get_by_index();
+			if (!isset($context->request->node->date_created))
+				throw new FtsServerException(409, "File incomplete");
+		
+			$total_chunks = $context->request->node->get_total_chunks();
 			for ($index = 0; $index < $total_chunks; $index++) {
 				$chunk = Chunk::get_by_index(
+					$this->model,
 					$context->request->node->id, 
 					$index
 					);
@@ -184,7 +274,7 @@ class Api {
 				echo $chunk->chunk;
 				flush();
 			}
-			return;
+			exit;
 		}
 	}
 	
@@ -196,48 +286,46 @@ class Api {
 		$node->delete($this->model);
 	}
 	
+	public function upload_chunk_data($context) {
+		$post = fopen("php://input", "r");
+		
+		$buffer = fread($post, $context->request->node->chunk_size);
+		if (!$buffer)
+			throw new FtsServerException(400, "Unable to read chunk data.");
+		
+		fclose($post);
+		
+		$chunk = Chunk::get_by_index(
+			$this->model, 
+			$context->request->node->id, 
+			$context->request->chunk_index
+			);
+		
+		if (hash("sha256", $buffer) !== $chunk->hash)
+			throw new FtsServerException(400, "Chunk failed hash check.");
+		
+		$chunk->chunk = $buffer;
+		$chunk->update($this->model);
+		
+		$hint = $context->request->node->get_next_hint($this->model);
+		if (isset($hint)) {
+			//$context->response->next_hint = $hint;
+			return;
+		}
+		
+		if (!$context->request->node->check_hash($this->model))
+			throw new FtsServerException(500, "File failed hash check.");
+		
+		$context->request->node->date_created = Util::now();
+		$context->request->node->update($this->model);
+	}
+	
 	public function file_info($context) {
 	}
 
 }
 
 /*
-function crypto_rand_secure($min, $max) {
-    $range = $max - $min;
-    if ($range == 0) return $min; // not so random...
-    $log = log($range, 2);
-    $bytes = (int) ($log / 8) + 1; // length in bytes
-    $bits = (int) $log + 1; // length in bits
-    $filter = (int) (1 << $bits) - 1; // set all lower bits to 1
-    do {
-        $rnd = hexdec(bin2hex(openssl_random_pseudo_bytes($bytes, $s)));
-        $rnd = $rnd & $filter; // discard irrelevant bits
-    } while ($rnd >= $range);
-    return $min + $rnd;
-}
-
-function get_next_chunk_index_hint($db, $file_id) {
-	$q = $db->prepare("select count(1) from chunks where file_id = ?;");
-	$q->bind_param("s", $file_id);
-	$q->execute();
-	$q->bind_result($chunks_remaining);
-	if (!$q->fetch()) die("Couldn't find a remaining chunk.");
-	$q->close();
-	
-	if ($chunks_remaining < 1)
-		return NULL;
-		
-	$offset = crypto_rand_secure(1, $chunks_remaining) - 1;
-	
-	$q = $db->prepare("select chunk_index from chunks where file_id = ? limit ?, 1;");
-	$q->bind_param("si", $file_id, $offset);
-	$q->execute();
-	$q->bind_result($chunk_index);
-	if (!$q->fetch()) die("Couldn't find a remaining chunk.");
-	$q->close();
-	
-	return $chunk_index;
-}
 
 function generate_file_id($db) {
 	while (true) {

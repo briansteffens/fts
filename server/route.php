@@ -85,7 +85,8 @@ try {
 	try {
 		$context->auth->check_node_permission($context);
 	} catch (FtsAuthException $e) {
-		if (!isset($_SERVER["PHP_AUTH_USER"]) && $context->auth->user === "anon") {
+		if (!isset($_SERVER["PHP_AUTH_USER"]) && 
+			$context->auth->user === "anon") {
 			header('WWW-Authenticate: Basic realm="FTS Realm"');
 			header('HTTP/1.0 401 Unauthorized');
 			exit;
@@ -95,7 +96,11 @@ try {
 	}
 	
 	if ($context->request->method == "POST") {
-		$api->create_node($context);
+		if (isset($request->chunk_index)) {
+			$api->upload_chunk_data($context);
+		} else {
+			$api->create_node($context);
+		}
 	} else {
 		// Old? dispatch
 		switch ($request->node_type) {

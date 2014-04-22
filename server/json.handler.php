@@ -5,40 +5,42 @@ class Handler {
 	public static function set_resource_descriptor($request) {
 		if ($request->method !== "POST" && $request->method !== "PUT")
 			return;
+		
+		if ($request->content_type === "json") {
+			$request->post_body = file_get_contents('php://input');
+
+			if (!isset($request->post_body))
+				return;
+		
+			$descriptor = json_decode($request->post_body);
+		
+			if (!$descriptor)
+				return;
+		
+			if (isset($descriptor->type))
+				$request->descriptor->type = $descriptor->type;
+		
+			if (isset($descriptor->user))
+				$request->descriptor->user = $descriptor->user;
+		
+			if (isset($descriptor->group))
+				$request->descriptor->group = $descriptor->group;
+		
+			if (isset($descriptor->permissions))
+				$request->descriptor->permissions = $descriptor->permissions;
 	
-		$request->post_body = file_get_contents('php://input');
+			if (isset($descriptor->file_size))
+				$request->descriptor->file_size = $descriptor->file_size;
 
-		if (!isset($request->post_body))
-			return;
-		
-		$descriptor = json_decode($request->post_body);
-		
-		if (!$descriptor)
-			return;
-		
-		if (isset($descriptor->type))
-			$request->descriptor->type = $descriptor->type;
-		
-		if (isset($descriptor->user))
-			$request->descriptor->user = $descriptor->user;
-		
-		if (isset($descriptor->group))
-			$request->descriptor->group = $descriptor->group;
-		
-		if (isset($descriptor->permissions))
-			$request->descriptor->permissions = $descriptor->permissions;
-	
-		if (isset($descriptor->file_size))
-			$request->descriptor->file_size = $descriptor->file_size;
+			if (isset($descriptor->chunk_size))
+				$request->descriptor->chunk_size = $descriptor->chunk_size;
 
-		if (isset($descriptor->chunk_size))
-			$request->descriptor->chunk_size = $descriptor->chunk_size;
+			if (isset($descriptor->file_hash))
+				$request->descriptor->file_hash = $descriptor->file_hash;
 
-		if (isset($descriptor->file_hash))
-			$request->descriptor->file_hash = $descriptor->file_hash;
-
-		if (isset($descriptor->chunk_hashes))
-			$request->descriptor->chunk_hashes = $descriptor->chunk_hashes;		
+			if (isset($descriptor->chunk_hashes))
+				$request->descriptor->chunk_hashes = $descriptor->chunk_hashes;
+		}	
 	}
 	
 	public static function process_response($context) {

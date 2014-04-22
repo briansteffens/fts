@@ -18,7 +18,7 @@ class Chunk extends Entity {
 	public static function get_by_index($model, $node_id, $index) {
 		$q = $model->query([
 			"select * from `".static::table_name()."` ".
-			"where `node_id` = ? and `index` = ? limit 1;",
+			"where `node_id` = ? and `index` = ? limit 1",
 			"ii",
 			$node_id,
 			$index
@@ -103,7 +103,50 @@ class Node extends Entity {
 	}
 	
 	public function get_total_chunks() {
-		return intval(ceil($this->file_size / $this->file_hash));
+		return intval(ceil($this->file_size / $this->chunk_size));
+	}
+	
+	public function get_next_hint($model) {
+		$q = $model->query([
+			"select count(1) as `count` from `chunks` ".
+			"where `node_id` = ? and `chunk` is null",
+			"i",
+			$this->id
+			]);
+
+		$q->read();
+		$q->close();
+		
+		$count = $q->row["count"];
+
+		if ($count == 0)
+			return NULL;
+			
+		$offset = Util::rand(0, $count);
+		
+		$q = $model->query([
+			"select `index` from chunks where `node_id` = ? limit ?, 1",
+			"ii",
+			$this->id,
+			$offset
+			]);
+		
+		$q->read();
+		$q->close();
+		
+		return $q->row["index"];
+	}
+	
+	public function check_hash($model) {
+		$hasher = hash_init("sha256");
+		$total = $this->get_total_chunks();
+		
+		for ($index = 0; $index < $total; $index++) {
+			$chunk = Chunk::get_by_index($model, $this->id, $index);
+			hash_update($hasher, $chunk->chunk);
+		}
+		
+		return hash_final($hasher) === $this->file_hash;
 	}
 	
 	public function select($row) {
