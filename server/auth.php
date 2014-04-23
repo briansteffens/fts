@@ -10,7 +10,7 @@ class Auth {
 	var $user = NULL;
 	var $groups = array();
 
-	public function check_for_credentials($context) {
+	public function check_for_credentials($ctx) {
 		$this->user = "anon";
 		$this->groups[] = "anon";
 		
@@ -31,30 +31,30 @@ class Auth {
 		}
 	}
 
-	public function check_node_permission($context) {
+	public function check_node_permission($ctx) {
 		if ($this->user === "root")
 			return;
 		
-		$target = $context->request->node;
+		$target = $ctx->req->node;
 		
 		// Inserts need the parent node's permissions checked
-		if ($context->request->method === "POST" &&
-			!isset($context->request->chunk_index))
-			$target = $context->request->node_parent;
+		if ($ctx->req->method === "POST" &&
+			!isset($ctx->req->chunk_index))
+			$target = $ctx->req->node_parent;
 		
 		// GET requires read access
 		$permission_required = "r";
 		
 		// POST/PUT/DELETE all require write access
-		if ($context->request->method !== "GET")
+		if ($ctx->req->method !== "GET")
 			$permission_required = "w";			
 		
 		// Owner can still read or write node metadata.
 		if ($target->user == $this->user &&
-			$context->request->content_type === "json" &&
-			!isset($context->request->chunk_index) &&
-			($context->request->method === "GET" || 
-			$context->request->method === "PUT"))
+			$ctx->req->meta &&
+			!isset($ctx->req->chunk_index) &&
+			($ctx->req->method === "GET" || 
+			$ctx->req->method === "PUT"))
 			return;
 		
 		// Get all the permission components (u/g/o) the user matches.

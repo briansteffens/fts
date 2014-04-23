@@ -5,88 +5,82 @@ require_once("shared.php");
 require_once("model.php");
 require_once("auth.php");
 
-$request = new stdClass;
+$req = new stdClass;
 
-$request->method = $_SERVER['REQUEST_METHOD'];
+$req->method = $_SERVER['REQUEST_METHOD'];
 
-$request->full_path = $_GET["url"];
-if ($request->full_path === "")
-	$request->full_path = "/";
+$req->full_path = $_GET["url"];
+if ($req->full_path === "")
+	$req->full_path = "/";
 
 // Figure out the kind of resource (node/chunk)
-$request->resource_type = "node";
-$request->chunk_index = NULL;
+$req->resource_type = "node";
+$req->chunk_index = NULL;
 if (isset($_GET["chunk"])) {
-	$request->resource_type = "chunk";
-	$request->chunk_index = $_GET["chunk"];
+	$req->resource_type = "chunk";
+	$req->chunk_index = $_GET["chunk"];
 }
 
-// Get the expected response content type.
-$request->content_type = "";
-if (isset($_GET["json"]))
-	$request->content_type = "json";
-elseif (isset($_GET["html"]))
-	$request->content_type = "html";
+$req->meta = isset($_GET["meta"]);
 
-// Import the appropriate content_type handler.
 require_once("json.handler.php");
 
-$context = new stdClass;
-$context->request = $request;
+$ctx = new stdClass;
+$ctx->req = $req;
 
-$context->auth = new Auth();
-$context->auth->check_for_credentials($context);
+$ctx->auth = new Auth();
+$ctx->auth->check_for_credentials($ctx);
 
 // Get the resource descriptor
-$request->descriptor = new Node();
-$request->descriptor->user = $context->auth->user;
-$request->descriptor->group = $context->auth->groups[0];
-$request->descriptor->permissions = "755";
-Handler::set_resource_descriptor($request);
+$req->descriptor = new Node();
+$req->descriptor->user = $ctx->auth->user;
+$req->descriptor->group = $ctx->auth->groups[0];
+$req->descriptor->permissions = "755";
+Handler::set_resource_descriptor($req);
 
-$context->result = new stdClass;
-$context->result->status_code = 200;
-$context->result->message = "";
+$ctx->res = new stdClass;
+$ctx->res->status_code = 200;
+$ctx->res->message = "";
 
 $model = new Model();
-$api = new Api($context, $model);
+$api = new Api($ctx, $model);
 
 $node_id = NULL;
-$request->node = NULL;
-$request->node_type = NULL;
-$request->node_parent = NULL;
+$req->node = NULL;
+$req->node_type = NULL;
+$req->node_parent = NULL;
 
 try {
-	$node_id = $api->resolve_path($request->full_path);
-	$request->node = Node::get_by_id($api->model, $node_id);
-	$request->node_type = $request->node->type;
-	if (isset($request->node->parent_id)) {
-		$request->node_parent = Node::get_by_id(
-			$api->model, $request->node->parent_id);
+	$node_id = $api->resolve_path($req->full_path);
+	$req->node = Node::get_by_id($api->model, $node_id);
+	$req->node_type = $req->node->type;
+	if (isset($req->node->parent_id)) {
+		$req->node_parent = Node::get_by_id(
+			$api->model, $req->node->parent_id);
 	}
 } catch (FtsServerException $e) {
 	if ($e->http_status_code !== 404)
 		throw $e;
-	if (isset($request->descriptor->type))
-		$request->node_type = $request->descriptor->type;
+	if (isset($req->descriptor->type))
+		$req->node_type = $req->descriptor->type;
 }
 
-if (!isset($request->node) && $request->method === "POST") {
-	$parent_path = Node::path_up_one_level($request->full_path);
-	$request->node_parent = Node::get_by_id($api->model, $parent_path);
+if (!isset($req->node) && $req->method === "POST") {
+	$parent_path = Node::path_up_one_level($req->full_path);
+	$req->node_parent = Node::get_by_id($api->model, $parent_path);
 }
 
 try {
-	if ($request->method !== "POST" && !isset($request->node)) {
+	if ($req->method !== "POST" && !isset($req->node)) {
 		throw new FtsServerException(404, "File not found");
 	}
 
 	// Check permission
 	try {
-		$context->auth->check_node_permission($context);
+		$ctx->auth->check_node_permission($ctx);
 	} catch (FtsAuthException $e) {
 		if (!isset($_SERVER["PHP_AUTH_USER"]) && 
-			$context->auth->user === "anon") {
+			$ctx->auth->user === "anon") {
 			header('WWW-Authenticate: Basic realm="FTS Realm"');
 			header('HTTP/1.0 401 Unauthorized');
 			exit;
@@ -95,40 +89,40 @@ try {
 		throw new FtsAuthException(403, "Forbidden");
 	}
 	
-	if ($context->request->method == "POST") {
-		if (isset($request->chunk_index)) {
-			$api->upload_chunk_data($context);
+	if ($ctx->req->method == "POST") {
+		if (isset($req->chunk_index)) {
+			$api->upload_chunk_data($ctx);
 		} else {
-			$api->create_node($context);
+			$api->create_node($ctx);
 		}
 	} else {
 		// Old? dispatch
-		switch ($request->node_type) {
+		switch ($req->node_type) {
 			case "dir":
-				switch ($context->request->method) {
+				switch ($ctx->req->method) {
 					case "GET":
-						$api->list_directory($context);
+						$api->list_directory($ctx);
 						break;
 					case "PUT":
-						$api->update_node($context);
+						$api->update_node($ctx);
 						break;
 					case "DELETE":
-						$api->delete_node($context);
+						$api->delete_node($ctx);
 						break;
 				}
 			
 				break;
 			
 			case "file":
-				switch ($context->request->method) {
+				switch ($ctx->req->method) {
 					case "GET":
-						$api->get_file($context);
+						$api->get_file($ctx);
 						break;
 					case "PUT":
-						$api->update_node($context);
+						$api->update_node($ctx);
 						break;
 					case "DELETE":
-						$api->delete_node($context);
+						$api->delete_node($ctx);
 						break;
 				}
 			
@@ -136,12 +130,12 @@ try {
 		}
 	}
 } catch (FtsServerException $e) {
-	$context->result->status_code = $e->http_status_code;
-	$context->result->message = $e->getMessage();
+	$ctx->res->status_code = $e->http_status_code;
+	$ctx->res->message = $e->getMessage();
 }
 
 $model->close();
 
-Handler::process_response($context);
+Handler::process_response($ctx);
 
 ?>

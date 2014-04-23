@@ -46,10 +46,10 @@ class Util {
 class Api {
 
 	var $model;
-	var $context;
+	var $ctx;
 	
-	public function Api($context, $model) {
-		$this->context = $context;
+	public function Api($ctx, $model) {
+		$this->context = $ctx;
 		$this->model = $model;
 	}
 
@@ -93,11 +93,11 @@ class Api {
 		return implode("/", $parts);
 	}
 
-	public function create_node($context) {
+	public function create_node($ctx) {
 		global $config;
 	
 		# Get the new directory's parent directory
-		$parts = explode("/", $context->request->full_path);
+		$parts = explode("/", $ctx->req->full_path);
 		$parts = array_filter($parts, "strlen");
 		$new_path_name = $parts[count($parts) - 1];
 		$parts = array_slice($parts, 0, -1);
@@ -120,17 +120,16 @@ class Api {
 		
 		if ($directory_exists)
 			throw new FtsServerException(409, "Cannot create node '".
-				$context->request->full_path."': File exists");
+				$ctx->req->full_path."': File exists");
 		
-		$descriptor = $context->request->descriptor;
+		$descriptor = $ctx->req->descriptor;
 		
 		$descriptor->name = $new_path_name;
 		$descriptor->parent_id = $parent_id;
 		$descriptor->date_created = Util::now();		
 
-		if ($context->request->content_type === "") {
+		if (!$ctx->req->meta && !isset($descriptor->type))
 			$descriptor->type = "file";
-		}
 		
 		if ($descriptor->type === "file") {
 			if (isset($descriptor->file_size) && 
@@ -144,8 +143,7 @@ class Api {
 		
 		$descriptor->insert($this->model);
 
-		if ($context->request->content_type === "json" &&
-			$descriptor->type === "file") {
+		if ($ctx->req->meta && $descriptor->type === "file") {
 			$chunk_index = 0;
 			foreach ($descriptor->chunk_hashes as $chunk_hash) {
 				$chunk = new Chunk();
@@ -158,11 +156,8 @@ class Api {
 			}
 			$chunk_index++;
 		}
-
-		if ($context->request->content_type !== "")
-			return;
 		
-		if ($context->request->content_type === "") {
+		if (!$ctx->req->meta) {
 			$post = fopen("php://input", "r");
 			$file_size = 0;
 			$chunk_size = $config["max_chunk_size"];
@@ -197,13 +192,13 @@ class Api {
 		}
 	}
 
-	public function update_node($context) {
-		$path = $this->clean_path($context->request->full_path);
+	public function update_node($ctx) {
+		$path = $this->clean_path($ctx->req->full_path);
 		$id = $this->resolve_path($path);
 		
 		$dir = Node::get_by_id($this->model, $id);
 		
-		$d = $context->request->descriptor;
+		$d = $ctx->req->descriptor;
 		
 		if (isset($d->parent_id))
 			$dir->parent_id = $d->parent_id;
@@ -229,8 +224,8 @@ class Api {
 		$dir->update($this->model);
 	}
 
-	public function list_directory($context) {
-		$path = $this->clean_path($context->request->full_path);
+	public function list_directory($ctx) {
+		$path = $this->clean_path($ctx->req->full_path);
 		$id = $this->resolve_path($path);
 		
 		$q = $this->model->query(
@@ -241,9 +236,9 @@ class Api {
 		$nodes = array();
 		
 		try {
-			$context->result->node_list_parent = Node::get_by_id(
+			$ctx->res->node_list_parent = Node::get_by_id(
 				$this->model, 
-				$context->request->node->parent_id
+				$ctx->req->node->parent_id
 				);
 		} catch (FtsServerException $e) {
 			if ($e->http_status_code !== 404)
@@ -256,52 +251,47 @@ class Api {
 			$nodes[] = $node;
 		}
 		
-		$context->result->node = $context->request->node;
-		$context->result->node_list = $nodes;
+		$ctx->res->node = $ctx->req->node;
+		$ctx->res->node_list = $nodes;
 		
 		$q->close();
 	}
 	
-	public function get_file($context) {
-		//$path = $this->clean_path($context->request->full_path);
-		//$id = $this->resolve_path($path);
-		
-		if ($context->request->content_type === "json") {
-			$context->result->node = $context->request->node;
+	public function get_file($ctx) {
+		if ($ctx->req->meta) {
+			$ctx->res->node = $ctx->req->node;
 			return;
 		}
-		
-		if ($context->request->content_type === "") {
-			if (!isset($context->request->node->date_created))
-				throw new FtsServerException(409, "File incomplete");
-		
-			$total_chunks = $context->request->node->get_total_chunks();
-			for ($index = 0; $index < $total_chunks; $index++) {
-				$chunk = Chunk::get_by_index(
-					$this->model,
-					$context->request->node->id, 
-					$index
-					);
-					
-				echo $chunk->chunk;
-				flush();
-			}
-			exit;
+	
+		if (!isset($ctx->req->node->date_created))
+			throw new FtsServerException(409, "File incomplete");
+	
+		$total_chunks = $ctx->req->node->get_total_chunks();
+		for ($index = 0; $index < $total_chunks; $index++) {
+			$chunk = Chunk::get_by_index(
+				$this->model,
+				$ctx->req->node->id, 
+				$index
+				);
+				
+			echo $chunk->chunk;
+			flush();
 		}
+		exit; # otherwise headers will attempt to be written later
 	}
 	
-	public function delete_node($context) {
-		$path = $this->clean_path($context->request->full_path);
+	public function delete_node($ctx) {
+		$path = $this->clean_path($ctx->req->full_path);
 		$id = $this->resolve_path($path);
 
 		$node = Node::get_by_id($this->model, $id);
 		$node->delete($this->model);
 	}
 	
-	public function upload_chunk_data($context) {
+	public function upload_chunk_data($ctx) {
 		$post = fopen("php://input", "r");
 		
-		$buffer = fread($post, $context->request->node->chunk_size);
+		$buffer = fread($post, $ctx->req->node->chunk_size);
 		if (!$buffer)
 			throw new FtsServerException(400, "Unable to read chunk data.");
 		
@@ -309,8 +299,8 @@ class Api {
 		
 		$chunk = Chunk::get_by_index(
 			$this->model, 
-			$context->request->node->id, 
-			$context->request->chunk_index
+			$ctx->req->node->id, 
+			$ctx->req->chunk_index
 			);
 		
 		if (hash("sha256", $buffer) !== $chunk->hash)
@@ -319,20 +309,20 @@ class Api {
 		$chunk->chunk = $buffer;
 		$chunk->update($this->model);
 		
-		$hint = $context->request->node->get_next_hint($this->model);
+		$hint = $ctx->req->node->get_next_hint($this->model);
 		if (isset($hint)) {
-			//$context->response->next_hint = $hint;
+			//$ctx->response->next_hint = $hint;
 			return;
 		}
 		
-		if (!$context->request->node->check_hash($this->model))
+		if (!$ctx->req->node->check_hash($this->model))
 			throw new FtsServerException(500, "File failed hash check.");
 		
-		$context->request->node->date_created = Util::now();
-		$context->request->node->update($this->model);
+		$ctx->req->node->date_created = Util::now();
+		$ctx->req->node->update($this->model);
 	}
 	
-	public function file_info($context) {
+	public function file_info($ctx) {
 	}
 
 }

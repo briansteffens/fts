@@ -22,14 +22,14 @@ tc = TestContext(config)
 class Tests(unittest.TestCase):
 
 	def reset(self):
-		r = requests.delete(self.tc.url("", "json"))
+		r = requests.delete(self.tc.url("", "meta"))
 		assert r.status_code == 200 or r.status_code == 404
 		
 		data = json.dumps({
 			"type": "dir",
 			"permissions": "777",
 		})
-		r = requests.post(self.tc.url("", "json"), data=data)
+		r = requests.post(self.tc.url("", "meta"), data=data)
 		assert r.status_code == 200
 
 	def setUp(self):
@@ -64,7 +64,7 @@ class PermissionTests(Tests):
 
 	def combined_file_tests(self, permissions, expect, user=None, group=None):
 		url = self.tc.url("file1", "")
-		urljson = self.tc.url("file1", "json")
+		urljson = self.tc.url("file1", "meta")
 	
 		r = requests.post(url, "content", auth=self.tc.auth)
 		self.assert_p(r.status_code, 200, "Failed to upload file.")
@@ -115,7 +115,7 @@ class PermissionTests(Tests):
 	
 	def combined_dir_tests(self, permissions, expect, user=None, group=None):
 		url = self.tc.url("dir1", "")
-		urljson = self.tc.url("dir1", "json")
+		urljson = self.tc.url("dir1", "meta")
 		
 		node = {
 			"type": "dir",
@@ -401,7 +401,7 @@ class BasicFileTests(Tests):
 		r = requests.post(self.tc.url("file1", ""), "file contents")
 		assert r.status_code == 200
 		
-		r = requests.get(self.tc.url("file1", "json"))
+		r = requests.get(self.tc.url("file1", "meta"))
 		assert r.status_code == 200
 		data = json.loads(r.text)
 		assert data["response"]["node"]["name"] == "file1"
@@ -433,11 +433,11 @@ class BasicFileTests(Tests):
 			],
 		}
 		# Start a file by posting metadata describing it
-		r = requests.post(self.tc.url("file1", "json"), json.dumps(data))
+		r = requests.post(self.tc.url("file1", "meta"), json.dumps(data))
 		assert r.status_code == 200
 		
 		# Get file metadata back from server
-		r = requests.get(self.tc.url("file1", "json"))
+		r = requests.get(self.tc.url("file1", "meta"))
 		assert r.status_code == 200
 		data = json.loads(r.text)
 		assert data["response"]["node"]["name"] == "file1"
@@ -454,7 +454,7 @@ class BasicFileTests(Tests):
 		assert r.status_code == 409
 		
 		# Upload the first chunk
-		url = self.tc.url("file1", "json") + "&chunk="
+		url = self.tc.url("file1", "") + "&chunk="
 		r = requests.post(url + "0", "gree")
 		assert r.status_code == 200
 		
@@ -475,20 +475,20 @@ class BasicFileTests(Tests):
 class BasicDirTests(Tests):
 
 	def test_list_directory(self):
-		r = requests.get(self.tc.url("", "json"))
+		r = requests.get(self.tc.url("", ""))
 		assert r.status_code == 200
 		
 		res = json.loads(r.text)["response"]
 		assert len(res["node_list"]) == 0
 		assert res["node"]["name"] == "testing"
 		
-		r = requests.post(self.tc.url("dir1", "json"), json.dumps({"type": "dir"}))
+		r = requests.post(self.tc.url("dir1", ""), json.dumps({"type": "dir"}))
 		assert r.status_code == 200
 
-		r = requests.post(self.tc.url("dir2", "json"), json.dumps({"type": "dir"}))
+		r = requests.post(self.tc.url("dir2", ""), json.dumps({"type": "dir"}))
 		assert r.status_code == 200
 		
-		r = requests.get(self.tc.url("", "json"))
+		r = requests.get(self.tc.url("", "meta"))
 		assert r.status_code == 200
 		
 		res = json.loads(r.text)["response"]
@@ -499,10 +499,10 @@ class BasicDirTests(Tests):
 		
 
 	def test_create_directory(self):
-		r = requests.post(self.tc.url("dir1", "json"), json.dumps({"type": "dir"}))
+		r = requests.post(self.tc.url("dir1", "meta"), json.dumps({"type": "dir"}))
 		assert r.status_code == 200
 		
-		r = requests.get(self.tc.url("dir1", "json"))
+		r = requests.get(self.tc.url("dir1", "meta"))
 		assert r.status_code == 200
 		data = json.loads(r.text)
 		assert data["response"]["node"]["name"] == "dir1"
@@ -516,25 +516,25 @@ class BasicDirTests(Tests):
 class BasicNodeTests(Tests):
 
 	def test_404(self):
-		r = requests.get(self.tc.url("invalid/path", "json"))
+		r = requests.get(self.tc.url("invalid/path", ""))
 		assert r.status_code == 404
 
 	
 	def test_update_node(self):
-		r = requests.post(self.tc.url("dir1", "json"), json.dumps({"type": "dir"}))
+		r = requests.post(self.tc.url("dir1", ""), json.dumps({"type": "dir"}))
 		assert r.status_code == 200
 
-		r = requests.get(self.tc.url("dir1", "json"))
+		r = requests.get(self.tc.url("dir1", "meta"))
 		assert r.status_code == 200
 		node = json.loads(r.text)["response"]["node"]
 		
 		node["group"] = "users"
 		node["permissions"] = "777"
 		
-		r = requests.put(self.tc.url("dir1", "json"), json.dumps(node))
+		r = requests.put(self.tc.url("dir1", "meta"), json.dumps(node))
 		assert r.status_code == 200
 		
-		r = requests.get(self.tc.url("dir1", "json"))
+		r = requests.get(self.tc.url("dir1", "meta"))
 		assert r.status_code == 200
 		node = json.loads(r.text)["response"]["node"]
 		
@@ -543,7 +543,7 @@ class BasicNodeTests(Tests):
 	
 	
 	def test_delete_node(self):
-		url = self.tc.url("dir1", "json")
+		url = self.tc.url("dir1", "")
 	
 		r = requests.post(url, json.dumps({"type": "dir"}))
 		assert r.status_code == 200
