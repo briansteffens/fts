@@ -167,6 +167,7 @@ class Api {
 			$file_size = 0;
 			$chunk_size = $config["max_chunk_size"];
 			$chunk_index = 0;
+			$hasher = hash_init("sha256");
 			while (!feof($post)) {
 				$buffer = fread($post, $chunk_size);
 				if (!$buffer)
@@ -176,11 +177,12 @@ class Api {
 				$chunk = new Chunk();
 				$chunk->node_id = $descriptor->id;
 				$chunk->index = $chunk_index;
-				$chunk->hash = "some";
+				$chunk->hash = hash("sha256", $buffer);
 				$chunk->chunk = $buffer;
 				$chunk->insert($this->model);
 				
 				$chunk_index++;
+				hash_update($hasher, $buffer);
 			}
 			
 			fclose($post);
@@ -189,12 +191,13 @@ class Api {
 			$descriptor->chunk_size = $chunk_size;
 			if ($descriptor->chunk_size > $descriptor->file_size)
 				$descriptor->chunk_size = $descriptor->file_size;
-			$descriptor->date_created = date("Y-m-d H:i:s");
+			$descriptor->file_hash = hash_final($hasher);
+			$descriptor->date_created = Util::now();
 			$descriptor->update($this->model);
 		}
 	}
 
-	public function update_directory($context) {
+	public function update_node($context) {
 		$path = $this->clean_path($context->request->full_path);
 		$id = $this->resolve_path($path);
 		
@@ -212,7 +215,16 @@ class Api {
 			$dir->group = $d->group;
 		
 		if (isset($d->permissions))
-			$dir->permissions = $d->permissions; 
+			$dir->permissions = $d->permissions;
+			
+		if (isset($d->file_size))
+			$dir->file_size = $d->file_size;
+		
+		if (isset($d->chunk_size))
+			$dir->chunk_size = $d->chunk_size;
+		
+		if (isset($d->file_hash))
+			$dir->file_hash = $d->file_hash;
 		
 		$dir->update($this->model);
 	}
@@ -278,7 +290,7 @@ class Api {
 		}
 	}
 	
-	public function delete_directory($context) {
+	public function delete_node($context) {
 		$path = $this->clean_path($context->request->full_path);
 		$id = $this->resolve_path($path);
 

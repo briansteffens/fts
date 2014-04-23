@@ -9,14 +9,16 @@ class Handler {
 		if ($request->content_type === "json") {
 			$request->post_body = file_get_contents('php://input');
 
-			if (!isset($request->post_body))
+			if (!isset($request->post_body)) {
 				return;
-		
+			}
+			
 			$descriptor = json_decode($request->post_body);
 		
-			if (!$descriptor)
+			if (!$descriptor) {
 				return;
-		
+			}
+			
 			if (isset($descriptor->type))
 				$request->descriptor->type = $descriptor->type;
 		
@@ -25,7 +27,7 @@ class Handler {
 		
 			if (isset($descriptor->group))
 				$request->descriptor->group = $descriptor->group;
-		
+			
 			if (isset($descriptor->permissions))
 				$request->descriptor->permissions = $descriptor->permissions;
 	

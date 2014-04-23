@@ -38,7 +38,8 @@ class Auth {
 		$target = $context->request->node;
 		
 		// Inserts need the parent node's permissions checked
-		if ($context->request->method === "POST")
+		if ($context->request->method === "POST" &&
+			!isset($context->request->chunk_index))
 			$target = $context->request->node_parent;
 		
 		// GET requires read access
@@ -46,10 +47,17 @@ class Auth {
 		
 		// POST/PUT/DELETE all require write access
 		if ($context->request->method !== "GET")
-			$permission_required = "w";
+			$permission_required = "w";			
+		
+		// Owner can still read or write node metadata.
+		if ($target->user == $this->user &&
+			$context->request->content_type === "json" &&
+			!isset($context->request->chunk_index) &&
+			($context->request->method === "GET" || 
+			$context->request->method === "PUT"))
+			return;
 		
 		// Get all the permission components (u/g/o) the user matches.
-		$checks = array();
 		if ($target->user == $this->user)
 			$checks[] = $target->permissions[0];
 		if (in_array($target->group, $this->groups))

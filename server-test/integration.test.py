@@ -9,6 +9,7 @@ class TestContext(object):
 
 	def __init__(self, conf):
 		self.conf = conf
+		self.auth = (conf["username"], conf["password"])
 
 	def url(self, subpath, response_type):
 		ret = self.conf["server"] + self.conf["test_path"] + subpath
@@ -24,7 +25,10 @@ class Tests(unittest.TestCase):
 		r = requests.delete(self.tc.url("", "json"))
 		assert r.status_code == 200 or r.status_code == 404
 		
-		data = json.dumps({"type": "dir"})
+		data = json.dumps({
+			"type": "dir",
+			"permissions": "777",
+		})
 		r = requests.post(self.tc.url("", "json"), data=data)
 		assert r.status_code == 200
 
@@ -35,9 +39,361 @@ class Tests(unittest.TestCase):
 		
 	def tearDown(self):
 		pass
+	
+	def msg(self, message, r=None):
+		ret = "\n" 
+		
+		if r is not None:
+			ret += "HTTP " + str(r.status_code) + "\n"
+			
+		ret += message + "\n"
+		
+		if r is not None:
+			ret += r.text
+			
+		return ret
+	
+	def assert_p(self, actual, expected, failmsg, r=None):
+		assert actual == expected, self.msg(
+			"Actual [" + str(actual) + "], " +
+			"expected [" + str(expected) + "]\n" + \
+			failmsg, r)
 
-# Make sure root account overrides security restrictions
-# Test the various permission flags 0-7
+
+class PermissionTests(Tests):			
+
+	def combined_file_tests(self, permissions, expect, user=None, group=None):
+		url = self.tc.url("file1", "")
+		urljson = self.tc.url("file1", "json")
+	
+		r = requests.post(url, "content", auth=self.tc.auth)
+		self.assert_p(r.status_code, 200, "Failed to upload file.")
+		
+		node = {
+			"type": "file",
+			"user": self.tc.conf["username"],
+			"group": self.tc.conf["group"],
+			"permissions": permissions,
+		}
+		if user is not None:
+			node["user"] = user
+		if group is not None:
+			node["group"] = group
+		r = requests.put(urljson, json.dumps(node), auth=self.tc.auth)
+		self.assert_p(r.status_code, 200, "Failed to set permissions.")
+		
+		# can user read file?
+		r = requests.get(url, auth=self.tc.auth)
+		self.assert_p(r.status_code, expect["read"],
+			"Unexpected response while reading file contents.")
+		
+		# can user read file chunk?
+		r = requests.get(urljson + "&chunk=0", auth=self.tc.auth)
+		self.assert_p(r.status_code, expect["read_chunk"],
+			"Unexpected response while reading file chunk.")
+		
+		# can user write file chunk?
+		r = requests.post(urljson + "&chunk=0", "content", auth=self.tc.auth)
+		self.assert_p(r.status_code, expect["write_chunk"],
+			"Unexpected response while writing file chunk.")
+		
+		# can user read file metadata?
+		r = requests.get(urljson, auth=self.tc.auth)
+		self.assert_p(r.status_code, expect["read_metadata"],
+			"Unexpected response while reading file metadata.")
+		
+		# can user write file metadata?
+		r = requests.put(urljson, json.dumps(node), auth=self.tc.auth)
+		self.assert_p(r.status_code, expect["write_metadata"],
+			"Unexpected response while writing file metadata.")
+			
+		# can user delete file?
+		r = requests.delete(urljson, auth=self.tc.auth)
+		self.assert_p(r.status_code, expect["delete_file"],
+			"Unexpected response while deleting file.")
+	
+	
+	def combined_dir_tests(self, permissions, expect, user=None, group=None):
+		url = self.tc.url("dir1", "")
+		urljson = self.tc.url("dir1", "json")
+		
+		node = {
+			"type": "dir",
+			"user": self.tc.conf["username"],
+			"group": self.tc.conf["group"],
+			"permissions": permissions,
+		}
+		if user is not None:
+			node["user"] = user
+		if group is not None:
+			node["group"] = group
+		r = requests.post(urljson, json.dumps(node), auth=self.tc.auth)
+		self.assert_p(r.status_code, 200, "Failed to create directory.",r=r)
+		
+		
+		
+	
+	def test_x(self):
+		self.combined_dir_tests("000", {
+			"list": 403,
+			"write_metadata": 200,
+			"delete": 403,
+		})
+	
+
+class FileUserPermissionTests(PermissionTests):
+	# none
+	def test_file_user_0_none(self):
+		self.combined_file_tests("000", {
+			"read": 403,
+			"read_chunk": 403,
+			"write_chunk": 403,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"delete_file": 403,
+		})
+	# execute
+	def test_file_user_1_x(self):
+		self.combined_file_tests("100", {
+			"read": 403,
+			"read_chunk": 403,
+			"write_chunk": 403,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"delete_file": 403,
+		})
+	# write
+	def test_file_user_2_w(self):
+		self.combined_file_tests("200", {
+			"read": 403,
+			"read_chunk": 403,
+			"write_chunk": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"delete_file": 200,
+		})
+	# write and execute
+	def test_file_user_3_wx(self):
+		self.combined_file_tests("300", {
+			"read": 403,
+			"read_chunk": 403,
+			"write_chunk": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"delete_file": 200,
+		})
+	# read
+	def test_file_user_4_r(self):
+		self.combined_file_tests("400", {
+			"read": 200,
+			"read_chunk": 200,
+			"write_chunk": 403,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"delete_file": 403,
+		})
+	# read and execute
+	def test_file_user_5_rx(self):
+		self.combined_file_tests("500", {
+			"read": 200,
+			"read_chunk": 200,
+			"write_chunk": 403,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"delete_file": 403,
+		})
+	# read and write
+	def test_file_user_6_rw(self):
+		self.combined_file_tests("600", {
+			"read": 200,
+			"read_chunk": 200,
+			"write_chunk": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"delete_file": 200,
+		})
+	# read, write, and execute
+	def test_file_user_7_rwx(self):
+		self.combined_file_tests("700", {
+			"read": 200,
+			"read_chunk": 200,
+			"write_chunk": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"delete_file": 200,
+		})
+		
+		
+
+class FileGroupPermissionTests(PermissionTests):
+
+	# none
+	def test_file_group_0_none(self):
+		self.combined_file_tests("000", {
+			"read": 403,
+			"read_chunk": 403,
+			"write_chunk": 403,
+			"read_metadata": 403,
+			"write_metadata": 403,
+			"delete_file": 403,
+		}, user="someother")
+	# execute
+	def test_file_group_1_x(self):
+		self.combined_file_tests("010", {
+			"read": 403,
+			"read_chunk": 403,
+			"write_chunk": 403,
+			"read_metadata": 403,
+			"write_metadata": 403,
+			"delete_file": 403,
+		}, user="someother")
+	# write
+	def test_file_group_2_w(self):
+		self.combined_file_tests("020", {
+			"read": 403,
+			"read_chunk": 403,
+			"write_chunk": 200,
+			"read_metadata": 403,
+			"write_metadata": 200,
+			"delete_file": 200,
+		}, user="someother")
+	# write and execute
+	def test_file_group_3_wx(self):
+		self.combined_file_tests("030", {
+			"read": 403,
+			"read_chunk": 403,
+			"write_chunk": 200,
+			"read_metadata": 403,
+			"write_metadata": 200,
+			"delete_file": 200,
+		}, user="someother")
+	# read
+	def test_file_group_4_r(self):
+		self.combined_file_tests("040", {
+			"read": 200,
+			"read_chunk": 200,
+			"write_chunk": 403,
+			"read_metadata": 200,
+			"write_metadata": 403,
+			"delete_file": 403,
+		}, user="someother")
+	# read and execute
+	def test_file_group_5_rx(self):
+		self.combined_file_tests("050", {
+			"read": 200,
+			"read_chunk": 200,
+			"write_chunk": 403,
+			"read_metadata": 200,
+			"write_metadata": 403,
+			"delete_file": 403,
+		}, user="someother")
+	# read and write
+	def test_file_group_6_rw(self):
+		self.combined_file_tests("060", {
+			"read": 200,
+			"read_chunk": 200,
+			"write_chunk": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"delete_file": 200,
+		}, user="someother")
+	# read, write, and execute
+	def test_file_group_7_rwx(self):
+		self.combined_file_tests("070", {
+			"read": 200,
+			"read_chunk": 200,
+			"write_chunk": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"delete_file": 200,
+		}, user="someother")
+
+
+class FileOtherPermissionTests(PermissionTests):
+
+	# none
+	def test_file_other_0_none(self):
+		self.combined_file_tests("000", {
+			"read": 403,
+			"read_chunk": 403,
+			"write_chunk": 403,
+			"read_metadata": 403,
+			"write_metadata": 403,
+			"delete_file": 403,
+		}, user="someother", group="someother")
+	# execute
+	def test_file_other_1_x(self):
+		self.combined_file_tests("001", {
+			"read": 403,
+			"read_chunk": 403,
+			"write_chunk": 403,
+			"read_metadata": 403,
+			"write_metadata": 403,
+			"delete_file": 403,
+		}, user="someother", group="someother")
+	# write
+	def test_file_other_2_w(self):
+		self.combined_file_tests("002", {
+			"read": 403,
+			"read_chunk": 403,
+			"write_chunk": 200,
+			"read_metadata": 403,
+			"write_metadata": 200,
+			"delete_file": 200,
+		}, user="someother", group="someother")
+	# write and execute
+	def test_file_other_3_wx(self):
+		self.combined_file_tests("003", {
+			"read": 403,
+			"read_chunk": 403,
+			"write_chunk": 200,
+			"read_metadata": 403,
+			"write_metadata": 200,
+			"delete_file": 200,
+		}, user="someother", group="someother")
+	# read
+	def test_file_other_4_r(self):
+		self.combined_file_tests("004", {
+			"read": 200,
+			"read_chunk": 200,
+			"write_chunk": 403,
+			"read_metadata": 200,
+			"write_metadata": 403,
+			"delete_file": 403,
+		}, user="someother", group="someother")
+	# read and execute
+	def test_file_other_5_rx(self):
+		self.combined_file_tests("005", {
+			"read": 200,
+			"read_chunk": 200,
+			"write_chunk": 403,
+			"read_metadata": 200,
+			"write_metadata": 403,
+			"delete_file": 403,
+		}, user="someother", group="someother")
+	# read and write
+	def test_file_other_6_rw(self):
+		self.combined_file_tests("006", {
+			"read": 200,
+			"read_chunk": 200,
+			"write_chunk": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"delete_file": 200,
+		}, user="someother", group="someother")
+	# read, write, and execute
+	def test_file_other_7_rwx(self):
+		self.combined_file_tests("007", {
+			"read": 200,
+			"read_chunk": 200,
+			"write_chunk": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"delete_file": 200,
+		}, user="someother", group="someother")
+
+
+
 
 class BasicFileTests(Tests):
 	
@@ -56,6 +412,7 @@ class BasicFileTests(Tests):
 		r = requests.get(self.tc.url("file1", ""))
 		assert r.status_code == 200
 		assert r.text == "file contents"
+	
 	
 	def test_create_file_metadata(self):
 		# greetings!
@@ -113,13 +470,9 @@ class BasicFileTests(Tests):
 		r = requests.get(self.tc.url("file1", ""))
 		assert r.status_code == 200
 		assert r.text == "greetings!"
-		
+
 
 class BasicDirTests(Tests):
-
-	def test_404(self):
-		r = requests.get(self.tc.url("invalid/path", "json"))
-		assert r.status_code == 404
 
 	def test_list_directory(self):
 		r = requests.get(self.tc.url("", "json"))
@@ -157,9 +510,17 @@ class BasicDirTests(Tests):
 		assert data["response"]["node"]["permissions"] == "755"
 		assert data["response"]["node"]["user"] == "anon"
 		assert data["response"]["node"]["group"] == "anon"
+
+
+
+class BasicNodeTests(Tests):
+
+	def test_404(self):
+		r = requests.get(self.tc.url("invalid/path", "json"))
+		assert r.status_code == 404
+
 	
-	
-	def test_update_directory(self):
+	def test_update_node(self):
 		r = requests.post(self.tc.url("dir1", "json"), json.dumps({"type": "dir"}))
 		assert r.status_code == 200
 
@@ -181,7 +542,7 @@ class BasicDirTests(Tests):
 		assert node["permissions"] == "777"
 	
 	
-	def test_delete_directory(self):
+	def test_delete_node(self):
 		url = self.tc.url("dir1", "json")
 	
 		r = requests.post(url, json.dumps({"type": "dir"}))
@@ -195,6 +556,7 @@ class BasicDirTests(Tests):
 		
 		r = requests.get(url)
 		assert r.status_code == 404
+
 
 
 if __name__ == "__main__":

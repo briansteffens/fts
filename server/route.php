@@ -110,10 +110,10 @@ try {
 						$api->list_directory($context);
 						break;
 					case "PUT":
-						$api->update_directory($context);
+						$api->update_node($context);
 						break;
 					case "DELETE":
-						$api->delete_directory($context);
+						$api->delete_node($context);
 						break;
 				}
 			
@@ -123,6 +123,12 @@ try {
 				switch ($context->request->method) {
 					case "GET":
 						$api->get_file($context);
+						break;
+					case "PUT":
+						$api->update_node($context);
+						break;
+					case "DELETE":
+						$api->delete_node($context);
 						break;
 				}
 			
