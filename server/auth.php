@@ -45,6 +45,11 @@ class Auth {
 		// GET requires read access
 		$permission_required = "r";
 		
+		// Listing a directory requires execute access
+		if ($target->type === "dir" && !$ctx->req->meta && 
+			$ctx->req->method === "GET")
+			$permission_required = "x";
+		
 		// POST/PUT/DELETE all require write access
 		if ($ctx->req->method !== "GET")
 			$permission_required = "w";			
@@ -54,9 +59,9 @@ class Auth {
 			$ctx->req->meta &&
 			!isset($ctx->req->chunk_index) &&
 			($ctx->req->method === "GET" || 
-			$ctx->req->method === "PUT"))
+			$ctx->req->method === "PUT")) {
 			return;
-		
+		}
 		// Get all the permission components (u/g/o) the user matches.
 		if ($target->user == $this->user)
 			$checks[] = $target->permissions[0];

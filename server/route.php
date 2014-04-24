@@ -67,7 +67,8 @@ try {
 
 if (!isset($req->node) && $req->method === "POST") {
 	$parent_path = Node::path_up_one_level($req->full_path);
-	$req->node_parent = Node::get_by_id($api->model, $parent_path);
+	$parent_id = $api->resolve_path($parent_path);
+	$req->node_parent = Node::get_by_id($api->model, $parent_id);
 }
 
 try {

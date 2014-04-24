@@ -130,16 +130,259 @@ class PermissionTests(Tests):
 		r = requests.post(urljson, json.dumps(node), auth=self.tc.auth)
 		self.assert_p(r.status_code, 200, "Failed to create directory.",r=r)
 		
+		# can user list directory?
+		r = requests.get(url, auth=self.tc.auth)
+		self.assert_p(r.status_code, expect["list"],
+			"Unexpected response while listing directory contents.")
 		
+		# can user read directory metadata?
+		r = requests.get(urljson, auth=self.tc.auth)
+		self.assert_p(r.status_code, expect["read_metadata"],
+			"Unexpected response while reading directory metadata.")
 		
-	
-	def test_x(self):
+		# can user write directory metadata?
+		r = requests.put(urljson, json.dumps(node), auth=self.tc.auth)
+		self.assert_p(r.status_code, expect["write_metadata"],
+			"Unexpected response while writing directory metadata.")
+		
+		# can user create child node?
+		d = json.dumps({"type": "dir"})
+		r = requests.post(self.tc.url("dir1/c1", "meta"), d, auth=self.tc.auth)
+		self.assert_p(r.status_code, expect["create_child_node"],
+			"Unexpected response while creating child node.")
+		
+		# can user delete directory?
+		r = requests.delete(url, auth=self.tc.auth)
+		self.assert_p(r.status_code, expect["delete"],
+			"Unexpected response while deleting directory.")
+		
+
+class DirUserPermissionTests(PermissionTests):
+	# none
+	def test_dir_user_0_none(self):
 		self.combined_dir_tests("000", {
 			"list": 403,
+			"read_metadata": 200,
 			"write_metadata": 200,
+			"create_child_node": 403,
 			"delete": 403,
-		})
-	
+		}, group="someother")
+	# execute
+	def test_dir_user_1_x(self):
+		self.combined_dir_tests("100", {
+			"list": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"create_child_node": 403,
+			"delete": 403,
+		}, group="someother")
+	# write
+	def test_dir_user_2_w(self):
+		self.combined_dir_tests("200", {
+			"list": 403,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"create_child_node": 200,
+			"delete": 200,
+		}, group="someother")
+	# write and execute
+	def test_dir_user_3_wx(self):
+		self.combined_dir_tests("300", {
+			"list": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"create_child_node": 200,
+			"delete": 200,
+		}, group="someother")
+	# read
+	def test_dir_user_4_r(self):
+		self.combined_dir_tests("400", {
+			"list": 403,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"create_child_node": 403,
+			"delete": 403,
+		}, group="someother")
+	# read and execute
+	def test_dir_user_5_rx(self):
+		self.combined_dir_tests("500", {
+			"list": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"create_child_node": 403,
+			"delete": 403,
+		}, group="someother")
+	# read and write
+	def test_dir_user_6_rw(self):
+		self.combined_dir_tests("600", {
+			"list": 403,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"create_child_node": 200,
+			"delete": 200,
+		}, group="someother")
+	# read, write, and execute
+	def test_dir_user_7_rwx(self):
+		self.combined_dir_tests("700", {
+			"list": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"create_child_node": 200,
+			"delete": 200,
+		}, group="someother")
+
+
+
+class DirGroupPermissionTests(PermissionTests):
+	# none
+	def test_dir_group_0_none(self):
+		self.combined_dir_tests("000", {
+			"list": 403,
+			"read_metadata": 403,
+			"write_metadata": 403,
+			"create_child_node": 403,
+			"delete": 403,
+		}, user="someother")
+	# execute
+	def test_dir_group_1_x(self):
+		self.combined_dir_tests("010", {
+			"list": 200,
+			"read_metadata": 403,
+			"write_metadata": 403,
+			"create_child_node": 403,
+			"delete": 403,
+		}, user="someother")
+	# write
+	def test_dir_group_2_w(self):
+		self.combined_dir_tests("020", {
+			"list": 403,
+			"read_metadata": 403,
+			"write_metadata": 200,
+			"create_child_node": 200,
+			"delete": 200,
+		}, user="someother")
+	# write and execute
+	def test_dir_group_3_wx(self):
+		self.combined_dir_tests("030", {
+			"list": 200,
+			"read_metadata": 403,
+			"write_metadata": 200,
+			"create_child_node": 200,
+			"delete": 200,
+		}, user="someother")
+	# read
+	def test_dir_group_4_r(self):
+		self.combined_dir_tests("040", {
+			"list": 403,
+			"read_metadata": 200,
+			"write_metadata": 403,
+			"create_child_node": 403,
+			"delete": 403,
+		}, user="someother")
+	# read and execute
+	def test_dir_group_5_rx(self):
+		self.combined_dir_tests("050", {
+			"list": 200,
+			"read_metadata": 200,
+			"write_metadata": 403,
+			"create_child_node": 403,
+			"delete": 403,
+		}, user="someother")
+	# read and write
+	def test_dir_group_6_rw(self):
+		self.combined_dir_tests("060", {
+			"list": 403,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"create_child_node": 200,
+			"delete": 200,
+		}, user="someother")
+	# read, write, and execute
+	def test_dir_group_7_rwx(self):
+		self.combined_dir_tests("070", {
+			"list": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"create_child_node": 200,
+			"delete": 200,
+		}, user="someother")
+
+
+class DirOtherPermissionTests(PermissionTests):
+	# none
+	def test_dir_other_0_none(self):
+		self.combined_dir_tests("00", {
+			"list": 403,
+			"read_metadata": 403,
+			"write_metadata": 403,
+			"create_child_node": 403,
+			"delete": 403,
+		}, user="someother", group="someother")
+	# execute
+	def test_dir_other_1_x(self):
+		self.combined_dir_tests("001", {
+			"list": 200,
+			"read_metadata": 403,
+			"write_metadata": 403,
+			"create_child_node": 403,
+			"delete": 403,
+		}, user="someother", group="someother")
+	# write
+	def test_dir_other_2_w(self):
+		self.combined_dir_tests("002", {
+			"list": 403,
+			"read_metadata": 403,
+			"write_metadata": 200,
+			"create_child_node": 200,
+			"delete": 200,
+		}, user="someother", group="someother")
+	# write and execute
+	def test_dir_other_3_wx(self):
+		self.combined_dir_tests("003", {
+			"list": 200,
+			"read_metadata": 403,
+			"write_metadata": 200,
+			"create_child_node": 200,
+			"delete": 200,
+		}, user="someother", group="someother")
+	# read
+	def test_dir_other_4_r(self):
+		self.combined_dir_tests("004", {
+			"list": 403,
+			"read_metadata": 200,
+			"write_metadata": 403,
+			"create_child_node": 403,
+			"delete": 403,
+		}, user="someother", group="someother")
+	# read and execute
+	def test_dir_other_5_rx(self):
+		self.combined_dir_tests("005", {
+			"list": 200,
+			"read_metadata": 200,
+			"write_metadata": 403,
+			"create_child_node": 403,
+			"delete": 403,
+		}, user="someother", group="someother")
+	# read and write
+	def test_dir_other_6_rw(self):
+		self.combined_dir_tests("006", {
+			"list": 403,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"create_child_node": 200,
+			"delete": 200,
+		}, user="someother", group="someother")
+	# read, write, and execute
+	def test_dir_other_7_rwx(self):
+		self.combined_dir_tests("007", {
+			"list": 200,
+			"read_metadata": 200,
+			"write_metadata": 200,
+			"create_child_node": 200,
+			"delete": 200,
+		}, user="someother", group="someother")
+
+
 
 class FileUserPermissionTests(PermissionTests):
 	# none
@@ -151,7 +394,7 @@ class FileUserPermissionTests(PermissionTests):
 			"read_metadata": 200,
 			"write_metadata": 200,
 			"delete_file": 403,
-		})
+		}, group="someother")
 	# execute
 	def test_file_user_1_x(self):
 		self.combined_file_tests("100", {
@@ -161,7 +404,7 @@ class FileUserPermissionTests(PermissionTests):
 			"read_metadata": 200,
 			"write_metadata": 200,
 			"delete_file": 403,
-		})
+		}, group="someother")
 	# write
 	def test_file_user_2_w(self):
 		self.combined_file_tests("200", {
@@ -171,7 +414,7 @@ class FileUserPermissionTests(PermissionTests):
 			"read_metadata": 200,
 			"write_metadata": 200,
 			"delete_file": 200,
-		})
+		}, group="someother")
 	# write and execute
 	def test_file_user_3_wx(self):
 		self.combined_file_tests("300", {
@@ -181,7 +424,7 @@ class FileUserPermissionTests(PermissionTests):
 			"read_metadata": 200,
 			"write_metadata": 200,
 			"delete_file": 200,
-		})
+		}, group="someother")
 	# read
 	def test_file_user_4_r(self):
 		self.combined_file_tests("400", {
@@ -191,7 +434,7 @@ class FileUserPermissionTests(PermissionTests):
 			"read_metadata": 200,
 			"write_metadata": 200,
 			"delete_file": 403,
-		})
+		}, group="someother")
 	# read and execute
 	def test_file_user_5_rx(self):
 		self.combined_file_tests("500", {
@@ -201,7 +444,7 @@ class FileUserPermissionTests(PermissionTests):
 			"read_metadata": 200,
 			"write_metadata": 200,
 			"delete_file": 403,
-		})
+		}, group="someother")
 	# read and write
 	def test_file_user_6_rw(self):
 		self.combined_file_tests("600", {
@@ -211,7 +454,7 @@ class FileUserPermissionTests(PermissionTests):
 			"read_metadata": 200,
 			"write_metadata": 200,
 			"delete_file": 200,
-		})
+		}, group="someother")
 	# read, write, and execute
 	def test_file_user_7_rwx(self):
 		self.combined_file_tests("700", {
@@ -221,7 +464,7 @@ class FileUserPermissionTests(PermissionTests):
 			"read_metadata": 200,
 			"write_metadata": 200,
 			"delete_file": 200,
-		})
+		}, group="someother")
 		
 		
 
