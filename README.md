@@ -26,3 +26,5 @@ To uninstall (from git directory):
 ```bash
 sudo make uninstall
 ```
+
+After `vagrant up`, the server should be available at localhost:9999.
