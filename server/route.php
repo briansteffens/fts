@@ -3,7 +3,7 @@
 require_once("config.php");
 require_once("shared.php");
 
-$url = $_GET["url"];
+$url = substr($_GET["url"], 1);
 
 # http://example.com/upload - simple single post upload
 if (starts_with($url, "upload")) {
