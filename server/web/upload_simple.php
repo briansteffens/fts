@@ -4,7 +4,7 @@
 	POST /upload
 	Example: https://example.com/upload
 	
-	Simple upload.
+	Simple upload. HTTP Basic Authentication required.
 	
 	Request query string:
 		file_name=[string]		// Optional filename, used when downloading  
@@ -19,6 +19,8 @@
 			"file_id": [string], 			// The server-generated unique ID of the new file (in URL form)
 		}
 */
+
+$username = authenticate_user();
 
 $db = db_connect();
 
@@ -59,9 +61,13 @@ $file_hash = hash_file("sha256", $config["cache_path"].$file_id);
 	
 $db = db_connect();
 
-$q = $db->prepare("insert into files (id, file_size, file_hash, file_name, content_type, date_started, date_created) values (?,?,?,?,?,now(),now());");
-$q->bind_param("sisss", $file_id, $file_size, $file_hash, $file_name, $content_type);
-$q->execute();
+$q = $db->prepare("insert into files (id, file_size, file_hash, file_name, ".
+                  "content_type, date_started, date_created, user_id) values ".
+                  "(?,?,?,?,?,now(),now(),".
+                  "(select id from users where username = ?));");
+$q->bind_param("sissss", $file_id, $file_size, $file_hash, $file_name,
+               $content_type, $username);
+$q->execute() or die('Error: ' . mysqli_error($db));
 $q->close();
 
 $db->close();

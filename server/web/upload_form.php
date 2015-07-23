@@ -1,3 +1,9 @@
+<?php
+
+$username = authenticate_user();
+
+?>
+
 <html>
 <body>
 

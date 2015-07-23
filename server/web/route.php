@@ -1,7 +1,7 @@
 <?php
 
-require_once("config.php");
-require_once("shared.php");
+require_once("/etc/fts-server.conf");
+require_once("../shared.php");
 
 $url = substr($_GET["url"], 1);
 

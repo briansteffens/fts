@@ -4,7 +4,7 @@
 	POST /start
 	Example: https://example.com/start
 	
-	Start a chunked upload.
+	Start a chunked upload. HTTP Basic Authentication required.
 	
 	Request:
 		{
@@ -24,6 +24,8 @@
 			"chunks_remaining": [int], 		// Total number of chunks still missing from the file			
 		}
 */
+
+$username = authenticate_user();
 
 $digest = json_decode(file_get_contents('php://input'));
 

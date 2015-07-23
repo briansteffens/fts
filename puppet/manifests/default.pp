@@ -3,13 +3,30 @@ Exec { path => [ "/bin/", "/sbin/" , "/usr/bin/", "/usr/sbin/" ] }
 include system-update
 include squid-proxy
 
+file { '/etc/fts-server.conf':
+  ensure => 'link',
+  target => '/vagrant/server/config.php',
+}
+
+file { '/var/fts':
+  ensure => 'directory',
+  owner => 'vagrant',
+  group => 'www-data',
+  mode => '750',
+}
+
+file { '/bin/fts-server':
+  ensure => 'link',
+  target => '/vagrant/server/cli.php',
+}
+
 class { "::mysql::server":
   require => Class['squid-proxy'],
 }
 
 file { '/var/www':
   ensure => 'link',
-  target => '/vagrant/server',
+  target => '/vagrant/server/web',
   require => Class["squid-proxy"],
 }
 

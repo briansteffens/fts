@@ -88,4 +88,38 @@ function ends_with($haystack, $needle)
     return $needle === "" || substr($haystack, -strlen($needle)) === $needle;
 }
 
+function hash_pass($raw) {
+    return password_hash($raw, PASSWORD_BCRYPT);
+}
+
+// Validates the current request with HTTP Basic Authentication and returns
+// the username if successful. Otherwise, returns FALSE.
+function authenticate_user() {
+    // Request HTTP Basic Authentication if it's not already present.
+    if (!isset($_SERVER['PHP_AUTH_USER'])) {
+        header('WWW-Authenticate: Basic realm="fts"');
+        header('HTTP/1.0 401 Unauthorized');
+        echo 'Authentication is required in order to upload files.';
+        exit;
+    }
+
+    // Get the hashed password from the database.
+    $db = db_connect();
+
+    $q = $db->prepare("select password from users where username = ?;");
+    $q->bind_param("s", $_SERVER['PHP_AUTH_USER']);
+    $q->execute() or die('Error: '.mysqli_error($db)."\n");
+    $q->bind_result($hash);
+    $q->fetch() or die('Invalid username or password.');
+    $q->close();
+
+    $db->close();
+
+    // Validate the stored password hash against the input.
+    if (!password_verify($_SERVER['PHP_AUTH_PW'], $hash))
+        die('Invalid username or password.');
+
+    return $_SERVER['PHP_AUTH_USER'];
+}
+
 ?>
