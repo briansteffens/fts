@@ -8,10 +8,13 @@ class UploadContext(object):
 	remote_file_id = None		# Unique file ID assigned by server
 	file_size = None			# Total bytes in file
 	chunk_size = None			# Bytes per upload chunk
-	remote_file_name = None		# Filename-only (no path) for headers when downloading with a browser
-	content_type = None			# Mime type for headers when downloading with a browser
+	remote_file_name = None		# Filename-only (no path) for headers when
+								# downloading with a browser
+	content_type = None			# Mime type for headers when downloading with a
+	                            # browser
 	file_hash = None			# Full hash of the file
-	total_chunks = None			# Total number of chunks - ceil(file_size / chunk_size)
+	total_chunks = None			# Total number of chunks - ceil
+	                            # (file_size / chunk_size)
 	
 	def __init__(self, server_url):
 		self.server_url = server_url
@@ -28,19 +31,27 @@ class Uploader(object):
 		with open(self.context.local_file_name, "rb") as f:
 			f.seek(chunk_index * self.context.chunk_size)
 			buf = f.read(self.context.chunk_size)
-		url = self.context.server_url + self.context.remote_file_id + "/" + str(chunk_index)
+		url = self.context.server_url + self.context.remote_file_id + "/" + \
+		      str(chunk_index)
 		res = requests.post(url, buf)
-		print(res.text)
 		return json.loads(res.text)
 		
 
 def parse_arguments(arguments=sys.argv[1:]):
 	parser = argparse.ArgumentParser()
 	
-	parser.add_argument("-s", "--server", default=None, help="Server URL", required=True)
-	parser.add_argument("-fn", "--filename", default=None, help="File to upload", required=True)
-	parser.add_argument("-cs", "--chunk-size", default=-1, help="Size in bytes of each chunk")
-	parser.add_argument("-ct", "--content-type", default="text/plain", help="Content-type header value (IE text/plain)")
+	parser.add_argument("-s", "--server", default=None, help="Server URL",
+	                    required=True)
+	parser.add_argument("-u", "--username", default=None,
+	                    help="Username for uploads")
+	parser.add_argument("-p", "--password", default=None,
+	                    help="Password for uploads")
+	parser.add_argument("-fn", "--filename", default=None,
+	                    help="File to upload", required=True)
+	parser.add_argument("-cs", "--chunk-size", default=-1,
+	                    help="Size in bytes of each chunk")
+	parser.add_argument("-ct", "--content-type", default="text/plain",
+	                    help="Content-type header value (IE text/plain)")
 	parser.add_argument("-r", "--resume", default=None, action='store_true')
 	
 	return parser.parse_args(arguments)
@@ -48,7 +59,10 @@ def parse_arguments(arguments=sys.argv[1:]):
 
 if __name__ == "__main__":
 	args = parse_arguments()
-	
+
+	username = args.username
+	password = args.password
+
 	context = UploadContext(args.server)
 	context.local_file_name = args.filename
 	spl = context.local_file_name.split("/")
@@ -58,7 +72,8 @@ if __name__ == "__main__":
 
 	# Get hash of the whole file
 	print("Calculating file hash..")
-	context.file_hash = subprocess.check_output(["sha256sum", context.local_file_name]);
+	context.file_hash = subprocess.check_output(["sha256sum",
+	                                             context.local_file_name]);
 	context.file_hash = context.file_hash.decode("utf-8").split(' ')[0]
 
 	# If unspecified, assume one chunk the size of the full file
@@ -72,7 +87,8 @@ if __name__ == "__main__":
 		resume_request = {
 			"file_hash": context.file_hash,
 		}
-		r = requests.post(context.server_url + "resume", json.dumps(resume_request))
+		r = requests.post(context.server_url + "resume",
+		                  json.dumps(resume_request))
 		resume_response = json.loads(r.text)
 		context.chunk_size = resume_response["chunk_size"]
 		spl = resume_response["file_id"].split("/")
@@ -106,7 +122,8 @@ if __name__ == "__main__":
 		# Report and confirmation		
 		print()
 		print("File size: " + str(context.file_size) + " bytes")
-		print("Chunks: " + str(len(chunks)) + " * " + str(context.chunk_size) + " bytes")
+		print("Chunks: " + str(len(chunks)) + " * " + str(context.chunk_size) +
+		      " bytes")
 		print("Digest size: " + str(len(digest_str)) + " bytes")		
 		
 		c = input("Upload digest? [Y/n] ")
@@ -114,7 +131,8 @@ if __name__ == "__main__":
 			sys.exit()
 
 		# Upload digest
-		r = requests.post(context.server_url + "start", digest_str)
+		r = requests.post(context.server_url + "start", digest_str,
+		                  auth=(username,password,))
 		if r.text is None or r.text == "":
 			print("No response from server")
 			sys.exit()
@@ -137,7 +155,9 @@ if __name__ == "__main__":
 	next_index = 0
 	while True:
 		res = uploader.upload_chunk(next_index)
-		print("[" + str(context.total_chunks - res["chunks_remaining"]) + "/" + str(context.total_chunks) + "] Uploaded chunk " + str(next_index) + ".")
+		print("[" + str(context.total_chunks - res["chunks_remaining"]) + "/" +
+		      str(context.total_chunks) + "] Uploaded chunk " +
+		      str(next_index) + ".")
 		
 		if res["next_chunk_index_hint"] == None:
 			break;
