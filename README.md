@@ -17,7 +17,7 @@ Client installation
 ===================
 The FTS client needs python3 and requests. To download and install:
 ```bash
-git clone https://github.com/Tiltar/fts
+git clone https://github.com/briansteffens/fts
 cd fts/client
 sudo make install
 ```
@@ -27,4 +27,13 @@ To uninstall (from git directory):
 sudo make uninstall
 ```
 
+
+Server installation
+===================
+The development server uses Vagrant and Puppet:
+```bash
+git clone https://github.com/briansteffens/fts
+cd fts
+vagrant up
+```
 After `vagrant up`, the server should be available at localhost:9999.
