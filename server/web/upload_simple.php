@@ -77,7 +77,10 @@ if (ends_with($url, ".json")) {
 	$result["file_id"] = $config["server_url"].$file_id;
 	echo json_encode($result);
 } elseif (ends_with($url, ".html")) {
-	echo "<a target='_blank' href='".$config["server_url"].$file_id."'>".$config["server_url"].$file_id."</a>";
+	echo "<a target='_blank' href='".$config["server_url"].$file_id."'>".
+	     $config["server_url"].$file_id."</a>";
+} else {
+	echo $config["server_url"].$file_id."\n";
 }
 
 ?>

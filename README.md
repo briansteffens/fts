@@ -37,3 +37,15 @@ cd fts
 vagrant up
 ```
 After `vagrant up`, the server should be available at localhost:9999.
+
+
+
+Curl examples
+=================
+```bash
+# Uploads a file
+curl -u <username>:<password> -i -X POST \
+     http://localhost:9999/upload_simple?file_name=<filename> \
+     -H "Content-Type: <content type>" \
+     --data-binary "@<filename>"
+```
