@@ -11,7 +11,7 @@ if (starts_with($url, "upload")) {
 	exit;
 }
 
-# http://example.com/start - upload a file digest, starting a chunked file upload
+# http://example.com/start - upload a file digest, star a chunked file upload
 if ($url == "start") {
 	require_once("upload_start.php");
 	exit;

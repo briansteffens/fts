@@ -21,29 +21,30 @@ function get_next_chunk_index_hint($db, $file_id) {
 	$q->bind_result($chunks_remaining);
 	if (!$q->fetch()) die("Couldn't find a remaining chunk.");
 	$q->close();
-	
+
 	if ($chunks_remaining < 1)
 		return NULL;
-		
+
 	$offset = crypto_rand_secure(1, $chunks_remaining) - 1;
-	
-	$q = $db->prepare("select chunk_index from chunks where file_id = ? limit ?, 1;");
+
+    $q = $db->prepare(
+        "select chunk_index from chunks where file_id = ? limit ?, 1;");
 	$q->bind_param("si", $file_id, $offset);
 	$q->execute();
 	$q->bind_result($chunk_index);
 	if (!$q->fetch()) die("Couldn't find a remaining chunk.");
 	$q->close();
-	
+
 	return $chunk_index;
 }
 
 function generate_file_id($db) {
 	while (true) {
 		$id = "";
-	
+
 		for ($i = 0; $i < 10; $i++) {
 			$c = crypto_rand_secure(0, 61);
-		
+
 			// 0-9 are digits
 			if ($c <= 9)
 				$id .= $c;
@@ -51,12 +52,12 @@ function generate_file_id($db) {
 			// 10-35 are upper-case letters (ASCII 65+)
 			elseif ($c <= 35)
 				$id .= chr(($c - 10) + 65);
-		
+
 			// 36-61 are lower-case letters (ASCII 97+)
 			else
 				$id .= chr(($c - 36) + 97);
 		}
-		
+
 		$q = $db->prepare("select count(1) from files where id = ?;");
 		$q->bind_param("s", $id);
 		$q->execute();
@@ -71,10 +72,11 @@ function generate_file_id($db) {
 
 function db_connect() {
 	global $config;
-	
-	$mysqli = new mysqli($config["db"]["host"], $config["db"]["user"], $config["db"]["pass"], $config["db"]["schema"]);
+
+    $mysqli = new mysqli($config["db"]["host"], $config["db"]["user"],
+            $config["db"]["pass"], $config["db"]["schema"]);
 	if (!$mysqli) die("Fail");
-	
+
 	return $mysqli;
 }
 

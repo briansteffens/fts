@@ -3,9 +3,9 @@
 /*
 	POST /start
 	Example: https://example.com/start
-	
+
 	Start a chunked upload. HTTP Basic Authentication required.
-	
+
 	Request:
 		{
 			"file_size": [int],			// Size in bytes of file to be uploaded
@@ -18,10 +18,10 @@
 			"content_type": [string],	// Optional content (mime) type, used
 			                            // when downloading
 		}
-		
+
 	Response:
 		{
-			"message": [string], 			// Informative message		
+			"message": [string], 			// Informative message
 			"file_id": [string], 			// The server-generated unique ID
 			                                // of the new file (in URL form)
 			"next_chunk_index_hint": [int], // A missing chunk that could be
@@ -38,7 +38,7 @@ $digest = json_decode(file_get_contents('php://input'));
 $db = db_connect();
 
 $file_id = generate_file_id($db);
-	
+
 $q = $db->prepare("insert into files (id, file_size, chunk_size, file_hash, ".
                   "file_name, content_type, date_started, user_id) ".
                   "values (?,?,?,?,?,?,now(),".
